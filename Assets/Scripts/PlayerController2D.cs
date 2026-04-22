@@ -40,9 +40,6 @@ namespace NaoEMario
 
         private Vector3 _spawnPoint; // pra onde respawnar
 
-        // Property pra outros scripts checarem (ex: inimigo só mata se tiver vivo)
-        public bool IsAlive => _alive;
-
         private void Awake()
         {
             _rb = GetComponent<Rigidbody2D>();

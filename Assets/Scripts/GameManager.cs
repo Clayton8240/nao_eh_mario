@@ -135,15 +135,5 @@ namespace NaoEMario
             if (Lives > 0) AddScoreInternal(Lives * 100, false);
             SetState(State.Victory);
         }
-
-        // Útil pra teste: zera o recorde do disco. Não tem botão na UI ainda
-        // mas dá pra chamar pelo console se quiser.
-        public void ResetHighScore()
-        {
-            HighScore = 0;
-            PlayerPrefs.DeleteKey(PREF_HIGHSCORE);
-            PlayerPrefs.Save();
-            OnScoreChanged?.Invoke();
-        }
     }
 }
