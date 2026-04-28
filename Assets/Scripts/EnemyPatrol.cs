@@ -25,7 +25,6 @@ namespace NaoEMario
         public float patrolRange = 3f;
 
         private Rigidbody2D _rb;
-        private Collider2D _col;
         private float _origin;   // X inicial, base da patrulha
         private int _dir = 1;    // 1 = direita, -1 = esquerda
         private bool _alive = true;
@@ -33,7 +32,6 @@ namespace NaoEMario
         private void Awake()
         {
             _rb = GetComponent<Rigidbody2D>();
-            _col = GetComponent<Collider2D>();
             _rb.freezeRotation = true;
             _rb.gravityScale = 3f;
             _origin = transform.position.x;

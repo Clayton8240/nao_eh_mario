@@ -29,6 +29,8 @@ namespace NaoEMario
 
         // Chave do PlayerPrefs (tipo um "localStorage" do Unity).
         // Coloquei prefixo pra não conflitar caso tenha outro joguinho na mesma máquina.
+        // Mantive o prefixo antigo "naoemario" pra não resetar o recorde de quem ja jogou
+        // o prototípo anterior (apenas mudou o título de exibição pra Blue Bunny Blaster).
         private const string PREF_HIGHSCORE = "naoemario.highscore";
 
         // Propriedades com get publico e set privado pra ninguem mexer de fora.
@@ -36,6 +38,11 @@ namespace NaoEMario
         public int HighScore { get; private set; }
         public int Lives { get; private set; } = 3;     // começa com 3 vidas
         public int CoinsCollected { get; private set; }
+
+        // ----- Sistema de fases (BBB tem 3) -----
+        // CurrentLevel é 1-based pq fica natural mostrar "Fase 1/3" pro jogador.
+        public int CurrentLevel { get; private set; } = 1;
+        public int TotalLevels => LevelLibrary.Count;
 
         // Enum pra deixar claro os estados do jogo (loop de jogo: Menu->Playing->GameOver/Victory)
         public enum State { Menu, Playing, GameOver, Victory }
@@ -47,6 +54,8 @@ namespace NaoEMario
         public event System.Action<State> OnStateChanged;
         // Esse aqui carrega a posição no mundo pra UI fazer um "+10" subir na tela.
         public event System.Action<int, Vector3> OnScorePopup;
+        // Disparado quando muda de fase (UI atualiza o "Fase X/3")
+        public event System.Action OnLevelChanged;
 
         private void Awake()
         {
@@ -123,17 +132,34 @@ namespace NaoEMario
             Score = 0;
             Lives = 3;
             CoinsCollected = 0;
+            CurrentLevel = 1;            // sempre começa da primeira fase
             OnScoreChanged?.Invoke();
             OnLivesChanged?.Invoke();
+            OnLevelChanged?.Invoke();
             SetState(State.Playing);
         }
 
-        public void Win()
+        // Chamado pelo Goal quando o jogador toca a bandeira/meta.
+        // Se ainda tem fase, avança; senão, vitória total.
+        public void CompleteLevel()
         {
-            // Bônus por terminar com vidas restantes (incentivo a não morrer)
-            // 100 pontos por vida que sobrou.
-            if (Lives > 0) AddScoreInternal(Lives * 100, false);
-            SetState(State.Victory);
+            // Bônus por terminar a fase com vidas restantes
+            // (50 por vida em fase intermediária, 100 na final = mais celebratório)
+            bool isLast = CurrentLevel >= TotalLevels;
+            int perLifeBonus = isLast ? 100 : 50;
+            if (Lives > 0) AddScoreInternal(Lives * perLifeBonus, false);
+
+            if (isLast)
+            {
+                SetState(State.Victory);
+            }
+            else
+            {
+                CurrentLevel++;
+                OnLevelChanged?.Invoke();
+                // O GameBootstrap escuta OnLevelChanged via UI? Não, mais simples:
+                // o Goal chama Bootstrap.LoadCurrentLevel() depois de chamar isso aqui.
+            }
         }
     }
 }

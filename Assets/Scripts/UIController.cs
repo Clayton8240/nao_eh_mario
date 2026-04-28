@@ -40,6 +40,9 @@ namespace NaoEMario
         // Textos da tela de Vitória
         private Text _victoryScoreText, _victoryHighText, _victoryCoinsText;
 
+        // Indicador "Fase X/3" no HUD
+        private Text _levelText;
+
         private void Start()
         {
             // Constroi tudo em ordem
@@ -56,6 +59,7 @@ namespace NaoEMario
                 GameManager.Instance.OnLivesChanged += RefreshLives;
                 GameManager.Instance.OnStateChanged += OnStateChanged;
                 GameManager.Instance.OnScorePopup += SpawnScorePopup;
+                GameManager.Instance.OnLevelChanged += RefreshLevel;
                 // Atualiza visual ja com o estado atual
                 OnStateChanged(GameManager.Instance.CurrentState);
             }
@@ -71,6 +75,7 @@ namespace NaoEMario
                 GameManager.Instance.OnLivesChanged -= RefreshLives;
                 GameManager.Instance.OnStateChanged -= OnStateChanged;
                 GameManager.Instance.OnScorePopup -= SpawnScorePopup;
+                GameManager.Instance.OnLevelChanged -= RefreshLevel;
             }
         }
 
@@ -175,10 +180,12 @@ namespace NaoEMario
         private void BuildMenu()
         {
             _menuPanel = MakePanel("MenuPanel", new Color(0.07f, 0.08f, 0.12f, 1f));
-            MakeText(_menuPanel.transform, "NÃO É MÁRIO", 100,
-                     new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(1200, 140));
-            MakeText(_menuPanel.transform, "Grey Box Prototype - M1", 36,
-                     new Vector2(0.5f, 0.5f), new Vector2(0, 130), new Vector2(800, 60));
+            MakeText(_menuPanel.transform, "BLUE BUNNY BLASTER", 96,
+                     new Vector2(0.5f, 0.5f), new Vector2(0, 240), new Vector2(1400, 140));
+            // Tagline em azulzinho do coelho
+            var sub = MakeText(_menuPanel.transform, "BBB • Plataforma 2D • 3 fases", 36,
+                     new Vector2(0.5f, 0.5f), new Vector2(0, 150), new Vector2(900, 60));
+            sub.color = new Color(0.45f, 0.75f, 1f);
             MakeText(_menuPanel.transform, "Setas/A,D para mover  |  Espaço/W para pular", 28,
                      new Vector2(0.5f, 0f), new Vector2(0, 60), new Vector2(1200, 40));
 
@@ -224,10 +231,14 @@ namespace NaoEMario
                 TextAnchor.UpperLeft);
             _coinsText.color = new Color(1f, 0.95f, 0.3f);
 
-            // Canto superior direito: Vidas
+            // Canto superior direito: Vidas + Fase
             _livesText = MakeText(_hudPanel.transform, "Vidas: 3", 48,
                 new Vector2(1, 1), new Vector2(-40, -40), new Vector2(600, 60),
                 TextAnchor.UpperRight);
+            _levelText = MakeText(_hudPanel.transform, "Fase: 1/3", 32,
+                new Vector2(1, 1), new Vector2(-40, -100), new Vector2(600, 40),
+                TextAnchor.UpperRight);
+            _levelText.color = new Color(0.6f, 0.85f, 1f);
         }
 
         private void BuildGameOver()
@@ -291,6 +302,14 @@ namespace NaoEMario
             if (_livesText != null) _livesText.text = $"Vidas: {GameManager.Instance.Lives}";
         }
 
+        // Atualiza o "Fase X/Y" tanto no HUD quanto na vitória.
+        private void RefreshLevel()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+            if (_levelText != null) _levelText.text = $"Fase: {gm.CurrentLevel}/{gm.TotalLevels}";
+        }
+
         // Cria o "+10" amarelo na tela na posição da moeda/inimigo
         // A magica é o WorldToScreenPoint que converte a coordenada do mundo
         // pra posição em pixel na tela.
@@ -323,6 +342,7 @@ namespace NaoEMario
             // Refresh pra textos das telas mostrarem valores corretos ao abrir
             RefreshScore();
             RefreshLives();
+            RefreshLevel();
         }
     }
 }

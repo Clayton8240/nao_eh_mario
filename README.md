@@ -1,15 +1,23 @@
-# Não É Mário 🍄 (M1 - Protótipo Grey Box)
+# Blue Bunny Blaster 🐰💨 (BBB)
 
-Trabalho de Desenvolvimento de Jogos - Entrega 1 (Protótipo Funcional).
+> Antigamente "Não É Mário (M1)" — agora rebatizado pra **BBB: Blue Bunny Blaster**
+> depois que achei um pack de sprites do Kenney com um coelhinho azul que caiu como
+> uma luva. Mesmo joguinho, com cara nova e mais conteúdo.
 
-Esse é um joguinho 2D de plataforma side-scroller feito na Unity 6, no estilo Mario simplão — a ideia é só validar que TODAS as mecânicas pedidas no escopo do M1 funcionam (loop completo de jogo, score, vidas, HUD, sons, inimigos, etc). Ainda tá em "grey box" mesmo, todos os personagens são quadrados/retângulos coloridos. Os assets bonitos vêm nas próximas entregas.
+Trabalho de Desenvolvimento de Jogos. Plataforma 2D side-scroller na Unity 6.
+Você é um coelho azul que pula de plataforma em plataforma, junta moedas, pisa
+em slimes/caranguejos e tenta chegar na bandeira no fim de cada fase. **3 fases
+no total**, com dificuldade crescente.
 
-## ✅ Checklist do M1
+## ✅ O que ta funcionando
 
-- [x] **Loop de Jogo**: Menu → Cena de Jogo → Game Over / Vitória
+- [x] **Loop completo**: Menu → Jogo → Game Over / Vitória
 - [x] **Persistência de Score**: score na sessão + recorde salvo em disco (PlayerPrefs)
-- [x] **Feedback ao Jogador**: HUD (score/recorde/moedas/vidas) + SFX (pulo, moeda, dano, stomp, vitória, click) + popup "+10" flutuante
-- [x] **Escopo escolhido**: Side Scrolling (estilo Mario)
+- [x] **Feedback ao Jogador**: HUD (score/recorde/moedas/vidas/fase) + SFX (pulo, moeda,
+      dano, stomp, vitória, click) + popup "+N" flutuante
+- [x] **Side scrolling** estilo Mario (escopo do trabalho)
+- [x] **3 fases** com layouts diferentes e progressão de dificuldade
+- [x] **Sprites de verdade** (Kenney Pixel Line Platformer, CC0)
 
 ## 🎮 Como rodar (passo a passo)
 
@@ -19,14 +27,14 @@ Esse é um joguinho 2D de plataforma side-scroller feito na Unity 6, no estilo M
 
 1. Abra o **Unity Hub**.
 2. Clique em **Add → Add project from disk**.
-3. Selecione a pasta `não é mario` (essa pasta aqui).
+3. Selecione a pasta do projeto (essa pasta aqui).
 4. Clique no projeto na lista pra abrir. (Primeira vez demora uns minutinhos pra importar.)
 
 ### 2. Abrir a cena
 
 No painel **Project** (canto inferior esquerdo do editor), navegue até:
 
-```
+```text
 Assets → Scenes → SampleScene
 ```
 
@@ -48,19 +56,28 @@ Clique no botão ▶ lá em cima no centro do editor. O menu vai aparecer e é s
 ## 🎮 Controles
 
 | Ação | Teclas |
-|---|---|
+| --- | --- |
 | Mover | `A` `D` ou setas `←` `→` |
 | Pular | `Espaço`, `W` ou seta `↑` |
 
 ## 📊 Sistema de pontuação
 
 | Ação | Pontos |
-|---|---|
+| --- | --- |
 | Pegar moeda 🪙 | +10 |
 | Pisar em inimigo 👾 | +50 |
-| Bônus de vitória 🏁 | +100 por vida restante |
+| Bônus de fase intermediária 🚩 | +50 por vida restante |
+| Bônus de vitória final 🏆 | +100 por vida restante |
 
 O recorde fica salvo entre sessões (não some quando fecha o jogo).
+
+## 🗺️ As 3 fases
+
+| Fase | Nome | Característica |
+| --- | --- | --- |
+| 1 | **Floresta Calma** | Tutorial. Curta, 1 inimigo só, plataformas tranquilas |
+| 2 | **Caverna Saltitante** | Mais buracos, plataformas em alturas variadas, 3 inimigos |
+| 3 | **Pulo Final** | Bem mais difícil — segmentos curtos, exige precisão, 6 inimigos |
 
 ## 🧠 Como funciona (arquitetura)
 
@@ -69,47 +86,58 @@ Decidi montar tudo por código, sem ficar arrastando coisa no editor. O único c
 Estrutura dos scripts (em [Assets/Scripts/](Assets/Scripts/)):
 
 | Arquivo | O que faz |
-|---|---|
+| --- | --- |
 | [GameBootstrap.cs](Assets/Scripts/GameBootstrap.cs) | Monta a cena inteira. **É o ponto de entrada.** |
-| [GameManager.cs](Assets/Scripts/GameManager.cs) | Singleton. Score, vidas, recorde, estado do jogo. |
+| [GameManager.cs](Assets/Scripts/GameManager.cs) | Singleton. Score, vidas, recorde, estado, fase atual. |
+| [LevelLibrary.cs](Assets/Scripts/LevelLibrary.cs) | Definição das 3 fases (plataformas/moedas/inimigos). |
+| [SpriteLibrary.cs](Assets/Scripts/SpriteLibrary.cs) | Carrega o tilemap do Kenney e fatia em sprites. |
 | [SfxPlayer.cs](Assets/Scripts/SfxPlayer.cs) | Toca os SFX (gerados por código com onda senoidal). |
-| [PlayerController2D.cs](Assets/Scripts/PlayerController2D.cs) | Movimento e pulo do player. |
+| [PlayerController2D.cs](Assets/Scripts/PlayerController2D.cs) | Movimento e pulo do coelho. |
 | [EnemyPatrol.cs](Assets/Scripts/EnemyPatrol.cs) | IA do inimigo (patrulha + leva stomp). |
 | [Coin.cs](Assets/Scripts/Coin.cs) | Moeda coletável. |
-| [Goal.cs](Assets/Scripts/Goal.cs) | Bandeira de fim de fase. |
+| [Goal.cs](Assets/Scripts/Goal.cs) | Bandeira de fim de fase (avança ou termina). |
 | [KillZone.cs](Assets/Scripts/KillZone.cs) | Zona de morte (cair fora do mapa). |
 | [CameraFollow2D.cs](Assets/Scripts/CameraFollow2D.cs) | Câmera lateral suave. |
 | [UIController.cs](Assets/Scripts/UIController.cs) | Constrói Menu, HUD, Game Over e Vitória por código. |
 | [ScorePopup.cs](Assets/Scripts/ScorePopup.cs) | Aquele "+10" amarelo que sobe e some. |
 
+> 💡 O namespace dos scripts continua sendo `NaoEMario` por dentro pra não quebrar
+> nada — só o que o jogador vê é "Blue Bunny Blaster". Foi mais barato fazer rebrand
+> só na UI/README do que renomear tudo (o git ia se confundir todo).
+
 Padrões de projeto que usei:
 
 - **Singleton** no `GameManager` e `SfxPlayer` (pra ter acesso global fácil).
-- **Observer** com `event System.Action` pra UI atualizar quando score/vidas/estado mudam (assim não preciso fazer polling no Update).
+- **Observer** com `event System.Action` pra UI atualizar quando score/vidas/estado/fase mudam (sem polling).
 - **State Machine** simples no `GameManager` (Menu → Playing → GameOver/Victory).
+- **Data-driven levels**: os layouts ficam em `LevelLibrary` como dados puros, o
+  `GameBootstrap` só lê e desenha. Adicionar uma fase 4 é só inserir mais um item no array.
 
 ## 🐛 Se der ruim
 
 | Problema | Solução |
-|---|---|
+| --- | --- |
 | Tela toda azul, nada acontece ao apertar Play | Você esqueceu de adicionar o componente `GameBootstrap` na cena |
+| Sprites aparecem como quadrados magenta | O Unity ainda não importou `Assets/Resources/bbb_tilemap.png` — espera o reimport ou faça **Assets → Reimport All** |
+| Sprites borrados (não pixel art) | No Unity, clica em `bbb_tilemap.png`, no Inspector seta **Filter Mode = Point** + **Compression = None**. (O código também força isso em runtime.) |
 | Erro `InputSystem` not found | Vai em **Window → Package Manager** e confirma que `Input System` ta instalado |
 | Nada de som | Pode ser o sistema do PC mesmo. No editor, confirma se o ícone de som no Game View não tá mutado |
 | Botões do menu não respondem ao clique | Talvez tem dois `EventSystem` na cena. Apaga um |
 | `Both Input Systems disabled` | **Edit → Project Settings → Player → Active Input Handling → Both** e reinicia o editor |
 
-## 🚧 O que falta pras próximas entregas (M2/M3)
+## 🚧 Próximos passos
 
-- [ ] Trocar os blocos coloridos por sprites de verdade
-- [ ] Música de fundo + SFX de verdade (não esses beeps gerados rs)
-- [ ] Animações (andar, pular, morrer)
-- [ ] Mais fases / dificuldade progressiva
+- [ ] Animações de andar/pular do coelho (já tem o sprite walk no tilemap, falta trocar entre frames)
+- [ ] Música de fundo
+- [ ] Inimigos com comportamentos diferentes (abelha voa, caranguejo é mais rápido, etc)
 - [ ] Power-ups
 - [ ] Tela de pause
+- [ ] Editor visual de fases (no lugar do hardcode em `LevelLibrary`)
 
 ## 📝 Créditos
 
 - Engine: **Unity 6** (com Universal Render Pipeline)
 - Input: **Unity New Input System**
-- Tudo que tem aqui dentro foi feito do zero, sem assets externos.
-- Sons gerados em runtime com onda senoidal (matemática que vimos em sinais 😄).
+- Sprites: **Kenney Pixel Line Platformer** ([kenney.nl](https://kenney.nl)) — licença CC0
+- Sons: gerados em runtime com onda senoidal (matemática que vimos em sinais 😄).
+- Código: feito do zero por mim como trabalho da disciplina.

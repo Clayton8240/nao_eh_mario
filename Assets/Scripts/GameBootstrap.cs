@@ -2,20 +2,23 @@
 // -----------------------------------------------------------------------------
 // Esse é o ponto de entrada do jogo. Ele monta a CENA INTEIRA por código.
 //
-// Por que fazer assim? Porque pra entregar o protótipo M1 eu queria que bastasse
+// Por que fazer assim? Porque pra entregar o protótipo eu queria que bastasse
 // adicionar UM unico componente em UM GameObject vazio e pronto, jogo funcional.
 // Sem ter que arrastar 20 prefabs, configurar 8 referências no Inspector, etc.
 //
 // O que ele cria em runtime:
-//   - GameManager (singleton de score/vidas/estado)
+//   - GameManager (singleton de score/vidas/estado/fase)
 //   - SfxPlayer (singleton de sons)
 //   - Câmera ortográfica + script de follow
 //   - Canvas/UI (delega pro UIController)
-//   - O nível: chão, plataformas, moedas, inimigos, kill zone, meta
-//   - O Player
+//   - O nível CORRENTE (3 fases no LevelLibrary)
+//   - O Player (coelho azul do Kenney)
 //
-// Dá pra evoluir isso pra ler de um JSON ou ScriptableObject, mas pro escopo
-// do M1 ta ok hardcoded.
+// Mudanças do BBB (Blue Bunny Blaster):
+//   - Multi-fase: 3 fases dentro de LevelLibrary, GameManager.CurrentLevel.
+//   - Sprites: usa o pack Kenney Pixel Line Platformer via SpriteLibrary.
+//   - Quando o player toca a meta, o GameManager incrementa o nivel e o
+//     Bootstrap reconstroi o cenario pra próxima fase.
 //
 // [DefaultExecutionOrder(-100)] = roda ANTES dos outros scripts. Importante
 // porque outros scripts dependem de GameManager.Instance existir.
@@ -31,7 +34,6 @@ namespace NaoEMario
         public static GameBootstrap Instance { get; private set; }
 
         [Header("Layout")]
-        public int levelLength = 60;     // largura total do nivel em unidades Unity
         public float killY = -8f;        // Y abaixo do qual o player morre
 
         // Truque pra não precisar criar layer custom: uso a layer 2 (IgnoreRaycast)
@@ -56,7 +58,9 @@ namespace NaoEMario
             EnsureManagers();
             BuildCameraIfNeeded();
             BuildUI();
-            BuildLevel();
+            // Pre-carrega fase 1 só pra ter algo no fundo do menu.
+            // O StartGame depois reconstroi tudo do zero.
+            BuildLevel(LevelLibrary.Get(1));
             BuildPlayer();
 
             // Começa no menu (player desabilitado nesse estado)
@@ -92,7 +96,7 @@ namespace NaoEMario
             // Configurações 2D
             cam.orthographic = true;       // sem perspectiva
             cam.orthographicSize = 6f;     // metade da altura visível em units
-            cam.backgroundColor = new Color(0.45f, 0.65f, 0.85f); // azul céu
+            cam.backgroundColor = new Color(0.55f, 0.78f, 0.95f); // azul céu igual o pack Kenney
             cam.transform.position = new Vector3(0, 2, -10);      // -10 em Z (padrao 2D)
 
             // Adiciona o script de follow
@@ -100,7 +104,7 @@ namespace NaoEMario
             if (_cameraFollow == null)
                 _cameraFollow = cam.gameObject.AddComponent<CameraFollow2D>();
             _cameraFollow.minX = 0f;
-            _cameraFollow.maxX = levelLength - 8f;
+            // maxX é setado em BuildLevel pq depende do tamanho da fase
         }
 
         private void BuildUI()
@@ -111,8 +115,8 @@ namespace NaoEMario
 
         // ---------- HELPERS DE CONSTRUÇÃO ----------
 
-        // Cache do sprite branco. Reutilizo pra tudo (chão, player, moeda, etc).
-        // A cor sai do SpriteRenderer.color, não do sprite em si.
+        // Cache do sprite branco (usado só em coisas sem sprite específico,
+        // tipo a haste da bandeira ou fallback se o tilemap não carregar).
         private static Sprite _whiteSprite;
         private static Sprite WhiteSprite()
         {
@@ -123,118 +127,173 @@ namespace NaoEMario
             return _whiteSprite;
         }
 
-        // Cria um "blocão" colorido com sprite branco + collider (opcional)
-        // Praticamente todo objeto visual do jogo é feito disso.
-        private GameObject MakeBlock(string name, Vector2 pos, Vector2 size,
-                                     Color color, Transform parent,
-                                     bool addCollider = true)
+        // Cria um GameObject com sprite do tilemap. Se o tile não existir
+        // (por algum motivo o Resources não carregou) usa sprite branco com
+        // a cor de fallback, pra pelo menos enxergar onde está.
+        private GameObject MakeSpriteObject(string name, Vector2 pos, Vector2 size,
+                                            int tileIndex, Transform parent,
+                                            bool addCollider = true,
+                                            bool tiled = false,
+                                            Color? tintIfFallback = null)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             go.transform.position = pos;
-            // Escala = tamanho do bloco em units (sprite branco é 1x1)
-            go.transform.localScale = new Vector3(size.x, size.y, 1f);
+
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = WhiteSprite();
-            sr.color = color;
-            if (addCollider) go.AddComponent<BoxCollider2D>();
+            var tile = SpriteLibrary.Get(tileIndex);
+            if (tile != null)
+            {
+                sr.sprite = tile;
+                if (tiled)
+                {
+                    // drawMode Tiled faz o sprite repetir pelo tamanho do RectTransform.
+                    // Nesse modo NÃO uso transform.localScale, uso sr.size.
+                    sr.drawMode = SpriteDrawMode.Tiled;
+                    sr.size = size;
+                }
+                else
+                {
+                    // Sprite normal: ajusto a escala. Como o sprite tem ppu=16 e é 16px,
+                    // ele já ocupa 1 unit. Multiplicando por size, fica em "size" units.
+                    go.transform.localScale = new Vector3(size.x, size.y, 1f);
+                }
+            }
+            else
+            {
+                // Fallback: sprite branco colorido (caso o tilemap não tenha carregado)
+                sr.sprite = WhiteSprite();
+                sr.color = tintIfFallback ?? Color.magenta;
+                go.transform.localScale = new Vector3(size.x, size.y, 1f);
+            }
+
+            if (addCollider)
+            {
+                var col = go.AddComponent<BoxCollider2D>();
+                if (tiled) col.size = size; // collider precisa cobrir o tamanho tileado
+            }
             return go;
         }
 
         // ---------- CONSTRUÇÃO DO NIVEL ----------
 
-        private void BuildLevel()
+        // Constroi o cenario inteiro a partir de um LevelData.
+        // Limpa o anterior (se existir) antes de reconstruir.
+        public void BuildLevel(LevelData lv)
         {
-            // Tudo do nivel fica embaixo desse pai. Pra reiniciar é so destruir ele.
-            _levelRoot = new GameObject("[Level]");
+            if (_levelRoot != null) Destroy(_levelRoot);
 
-            // Chão dividido em segmentos com lacunas (buracos pra cair)
-            var groundColor = new Color(0.35f, 0.28f, 0.22f); // marrom
-            BuildGroundSegment(0, 18, groundColor);
-            BuildGroundSegment(22, 14, groundColor);   // gap de 4 units
-            BuildGroundSegment(40, 20, groundColor);   // gap de 4 units
+            _levelRoot = new GameObject("[Level] " + lv.name);
 
-            // Plataformas no ar
-            var platColor = new Color(0.55f, 0.45f, 0.35f);
-            MakeBlock("Platform", new Vector2(8,  2.5f), new Vector2(3, 0.5f), platColor, _levelRoot.transform);
-            MakeBlock("Platform", new Vector2(13, 4.0f), new Vector2(3, 0.5f), platColor, _levelRoot.transform);
-            MakeBlock("Platform", new Vector2(20, 1.5f), new Vector2(2, 0.5f), platColor, _levelRoot.transform);
-            MakeBlock("Platform", new Vector2(28, 3.0f), new Vector2(3, 0.5f), platColor, _levelRoot.transform);
-            MakeBlock("Platform", new Vector2(35, 4.5f), new Vector2(3, 0.5f), platColor, _levelRoot.transform);
-            MakeBlock("Platform", new Vector2(45, 2.5f), new Vector2(3, 0.5f), platColor, _levelRoot.transform);
-            MakeBlock("Platform", new Vector2(50, 4.0f), new Vector2(3, 0.5f), platColor, _levelRoot.transform);
+            // Atualiza limite da camera pelo tamanho da fase
+            if (_cameraFollow != null) _cameraFollow.maxX = lv.length - 8f;
 
-            // Moedas espalhadas
-            SpawnCoin(new Vector2(8,  4f));
-            SpawnCoin(new Vector2(13, 5.5f));
-            SpawnCoin(new Vector2(15, 5.5f));
-            SpawnCoin(new Vector2(20, 3f));
-            SpawnCoin(new Vector2(28, 4.5f));
-            SpawnCoin(new Vector2(35, 6f));
-            SpawnCoin(new Vector2(42, 1.5f));
-            SpawnCoin(new Vector2(45, 4f));
-            SpawnCoin(new Vector2(50, 5.5f));
-            SpawnCoin(new Vector2(55, 1.5f));
+            // ----- CHÃO -----
+            foreach (var g in lv.ground)
+            {
+                BuildGroundSegment(g.startX, g.length);
+            }
 
-            // Inimigos
-            SpawnEnemy(new Vector2(12, 0.5f), 2.5f);
-            SpawnEnemy(new Vector2(28, 0.5f), 3f);
-            SpawnEnemy(new Vector2(45, 0.5f), 4f);
+            // ----- PLATAFORMAS NO AR -----
+            foreach (var p in lv.platforms)
+            {
+                MakeSpriteObject("Platform", p.pos, p.size,
+                    SpriteLibrary.TILE_PLATFORM_MID, _levelRoot.transform,
+                    tiled: true,
+                    tintIfFallback: new Color(0.55f, 0.45f, 0.35f));
+            }
 
-            // KillZone (trigger gigante embaixo do mapa pra detectar quedas)
+            // ----- MOEDAS -----
+            foreach (var c in lv.coins) SpawnCoin(c);
+
+            // ----- INIMIGOS -----
+            foreach (var e in lv.enemies) SpawnEnemy(e);
+
+            // ----- KILL ZONE -----
+            // Trigger gigante embaixo do mapa pra detectar quedas no abismo
             var kz = new GameObject("KillZone");
             kz.transform.SetParent(_levelRoot.transform, false);
-            kz.transform.position = new Vector2(levelLength * 0.5f, killY);
+            kz.transform.position = new Vector2(lv.length * 0.5f, killY);
             var kzCol = kz.AddComponent<BoxCollider2D>();
-            kzCol.size = new Vector2(levelLength * 2f, 2f);
+            kzCol.size = new Vector2(lv.length * 2f, 2f);
             kzCol.isTrigger = true;
             kz.AddComponent<KillZone>();
 
-            // Meta (bandeira) no fim do nivel
-            var goal = MakeBlock("Goal",
-                new Vector2(levelLength - 2f, 1.5f),
-                new Vector2(1f, 3f),
-                new Color(0.95f, 0.85f, 0.2f),
-                _levelRoot.transform,
-                addCollider: false);
-            // Usa BoxCollider trigger ao invés do solido (pra atravessar)
-            var goalCol = goal.AddComponent<BoxCollider2D>();
-            goalCol.isTrigger = true;
-            goal.AddComponent<Goal>();
+            // ----- META (bandeira) -----
+            // Uso a "seta amarela" tile 43 como bandeira em cima de uma haste branca.
+            float goalX = lv.length - 2f;
 
-            // Onde o player nasce
-            _spawnPoint = new Vector3(1.5f, 2f, 0f);
+            // Haste (visual, sem collider)
+            var pole = new GameObject("GoalPole");
+            pole.transform.SetParent(_levelRoot.transform, false);
+            pole.transform.position = new Vector2(goalX, 1.5f);
+            pole.transform.localScale = new Vector3(0.1f, 3f, 1f);
+            var poleSr = pole.AddComponent<SpriteRenderer>();
+            poleSr.sprite = WhiteSprite();
+            poleSr.color = new Color(0.9f, 0.9f, 0.9f);
+
+            // Bandeirinha (sprite do tile + trigger pra detectar player)
+            var flag = MakeSpriteObject("Goal", new Vector2(goalX, 3f),
+                new Vector2(1f, 1f), SpriteLibrary.TILE_FLAG,
+                _levelRoot.transform, addCollider: false,
+                tintIfFallback: new Color(0.95f, 0.85f, 0.2f));
+            // Box trigger maior pra ficar facil de "tocar" a meta (cobre a haste toda)
+            var goalCol = flag.AddComponent<BoxCollider2D>();
+            goalCol.size = new Vector2(1.2f, 3.5f);
+            goalCol.offset = new Vector2(0f, -1f);
+            goalCol.isTrigger = true;
+            flag.AddComponent<Goal>();
+
+            // Onde o player nasce (definido pela fase)
+            _spawnPoint = new Vector3(lv.spawn.x, lv.spawn.y, 0f);
         }
 
-        private void BuildGroundSegment(float startX, float length, Color color)
+        private void BuildGroundSegment(float startX, float length)
         {
-            // Coloco o pivot no meio do segmento (por isso startX + length/2)
-            MakeBlock("Ground",
+            // Topo (com grama) -- 1 unidade de altura no Y=-0.5
+            MakeSpriteObject("GroundTop",
                 new Vector2(startX + length * 0.5f, -0.5f),
                 new Vector2(length, 1f),
-                color,
-                _levelRoot.transform);
+                SpriteLibrary.TILE_GROUND_GRASS,
+                _levelRoot.transform,
+                tiled: true,
+                tintIfFallback: new Color(0.4f, 0.6f, 0.3f));
+
+            // Camada de terra abaixo (decoração visual, sem collider novo
+            // pq o de cima ja segura o player).
+            var dirt = MakeSpriteObject("GroundDirt",
+                new Vector2(startX + length * 0.5f, -2f),
+                new Vector2(length, 2f),
+                SpriteLibrary.TILE_GROUND_SOLID,
+                _levelRoot.transform,
+                addCollider: false,
+                tiled: true,
+                tintIfFallback: new Color(0.45f, 0.32f, 0.22f));
+            dirt.GetComponent<SpriteRenderer>().sortingOrder = -1;
         }
 
         private void SpawnCoin(Vector2 pos)
         {
-            var go = MakeBlock("Coin", pos, new Vector2(0.4f, 0.4f),
-                new Color(1f, 0.85f, 0.1f), _levelRoot.transform, addCollider: false);
-            // Circle pra ficar mais "moedal" hahaha
+            var go = MakeSpriteObject("Coin", pos, new Vector2(0.6f, 0.6f),
+                SpriteLibrary.TILE_COIN, _levelRoot.transform,
+                addCollider: false,
+                tintIfFallback: new Color(1f, 0.85f, 0.1f));
+            // Trigger circular pra ser mais "moedal"
             var col = go.AddComponent<CircleCollider2D>();
             col.isTrigger = true;
             col.radius = 0.5f;
             go.AddComponent<Coin>();
         }
 
-        private void SpawnEnemy(Vector2 pos, float patrolRange)
+        private void SpawnEnemy(EnemySpawn def)
         {
-            var go = MakeBlock("Enemy", pos, new Vector2(0.8f, 0.8f),
-                new Color(0.85f, 0.2f, 0.2f), _levelRoot.transform);
+            var go = MakeSpriteObject("Enemy", def.pos, new Vector2(0.9f, 0.9f),
+                def.spriteTile, _levelRoot.transform,
+                tintIfFallback: new Color(0.85f, 0.2f, 0.2f));
             var rb = go.AddComponent<Rigidbody2D>();
             rb.freezeRotation = true;
             var e = go.AddComponent<EnemyPatrol>();
-            e.patrolRange = patrolRange;
+            e.patrolRange = def.patrolRange;
         }
 
         // ---------- PLAYER ----------
@@ -244,15 +303,27 @@ namespace NaoEMario
             _player = new GameObject("Player");
             _player.layer = PLAYER_LAYER; // pra ser ignorado pelo BoxCast de chão
             _player.transform.position = _spawnPoint;
-            // Escala 0.7 x 1.1 = retangulo levemente alto (tipo pessoa)
-            _player.transform.localScale = new Vector3(0.7f, 1.1f, 1f);
+            // Coelhinho do Kenney é quadrado 16x16 = 1 unit. Boto 1.1 pra ficar "fofo"
+            _player.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
 
             var sr = _player.AddComponent<SpriteRenderer>();
-            sr.sprite = WhiteSprite();
-            sr.color = new Color(0.2f, 0.5f, 0.95f); // azul
+            var bunny = SpriteLibrary.Get(SpriteLibrary.TILE_PLAYER);
+            if (bunny != null)
+            {
+                sr.sprite = bunny;
+                // sem tint - o coelho ja é azul \o/
+            }
+            else
+            {
+                sr.sprite = WhiteSprite();
+                sr.color = new Color(0.2f, 0.5f, 0.95f); // azul fallback
+            }
             sr.sortingOrder = 5; // desenha por cima de outros sprites
 
-            _player.AddComponent<BoxCollider2D>();
+            // Collider menor que o sprite pra dar uma "folguinha" nas colisoes
+            var box = _player.AddComponent<BoxCollider2D>();
+            box.size = new Vector2(0.7f, 0.95f);
+
             var rb = _player.AddComponent<Rigidbody2D>();
             // Continuous evita que ele atravesse o chão em velocidade alta (tunneling)
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
@@ -271,26 +342,46 @@ namespace NaoEMario
             _player.SetActive(false);
         }
 
-        // ---------- COMANDOS DA UI ----------
+        // ---------- COMANDOS DA UI / FLUXO DE FASES ----------
 
-        // Botão "JOGAR" / "TENTAR DE NOVO" / "JOGAR DE NOVO"
+        // Botão "JOGAR" / "TENTAR DE NOVO" / "JOGAR DE NOVO".
+        // Sempre começa da fase 1.
         public void StartGame()
         {
-            // Reconstroi o nivel inteiro (limpa moedas pegas, inimigos mortos, etc)
-            if (_levelRoot != null) Destroy(_levelRoot);
-            BuildLevel();
+            GameManager.Instance.StartNewGame();   // zera score/vidas + level=1
+            BuildLevel(LevelLibrary.Get(GameManager.Instance.CurrentLevel));
+            RespawnPlayerForCurrentLevel();
+        }
 
+        // Chamado pelo Goal quando o jogador completa uma fase intermediária.
+        // O GameManager ja foi avisado (e ja incrementou CurrentLevel) antes disso.
+        public void LoadCurrentLevel()
+        {
+            BuildLevel(LevelLibrary.Get(GameManager.Instance.CurrentLevel));
+            RespawnPlayerForCurrentLevel();
+        }
+
+        private void RespawnPlayerForCurrentLevel()
+        {
             _player.SetActive(true);
             var ctrl = _player.GetComponent<PlayerController2D>();
             ctrl.SetSpawn(_spawnPoint);
             ctrl.ResetForNewGame();
-
-            GameManager.Instance.StartNewGame();
+            // Realinha a camera pro novo spawn (senão o lerp leva 1s pra alcançar)
+            if (_cameraFollow != null)
+            {
+                _cameraFollow.transform.position =
+                    new Vector3(_spawnPoint.x + 2f, _spawnPoint.y + 1.5f, -10f);
+            }
         }
 
         // Botão "MENU"
         public void GoToMenu()
         {
+            // Cancela qualquer Invoke pendente (ex: Respawn agendado depois de uma morte)
+            // antes de desativar. Sem isso, o Respawn pode reativar o collider enquanto
+            // o player está no menu, o que não quebra o jogo mas é um bug silencioso.
+            _player.GetComponent<PlayerController2D>()?.CancelInvoke();
             _player.SetActive(false);
             GameManager.Instance.SetState(GameManager.State.Menu);
         }
