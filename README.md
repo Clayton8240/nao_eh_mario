@@ -18,6 +18,7 @@ no total**, com dificuldade crescente.
 - [x] **Side scrolling** estilo Mario (escopo do trabalho)
 - [x] **3 fases** com layouts diferentes e progressão de dificuldade
 - [x] **Sprites de verdade** (Kenney Pixel Line Platformer, CC0)
+- [x] **Revisão de código**: bugs corrigidos e código morto removido
 
 ## 🎮 Como rodar (passo a passo)
 
@@ -104,6 +105,18 @@ Estrutura dos scripts (em [Assets/Scripts/](Assets/Scripts/)):
 > 💡 O namespace dos scripts continua sendo `NaoEMario` por dentro pra não quebrar
 > nada — só o que o jogador vê é "Blue Bunny Blaster". Foi mais barato fazer rebrand
 > só na UI/README do que renomear tudo (o git ia se confundir todo).
+
+### 🔍 Revisão de código (o que foi corrigido)
+
+Passei por todos os scripts procurando bugs, código duplicado e código morto:
+
+| Tipo | Onde | Problema | Correção |
+| --- | --- | --- | --- |
+| Bug | `SpriteLibrary.cs` | `TILE_PLATFORM_MID = 4` era igual a `TILE_GROUND_GRASS = 4` → chão e plataformas usavam o mesmo sprite | Mudou para índice `24` |
+| Bug | `GameBootstrap.cs` | `GoToMenu()` não cancelava o `Invoke(Respawn)` pendente → collider do player podia reativar durante o menu | Adicionado `CancelInvoke()` antes de desativar o player |
+| Código morto | `GameManager.cs` | Método `Win()` existia só pra chamar `CompleteLevel()`, mas ninguém mais chamava `Win()` | Método removido |
+| Código morto | `EnemyPatrol.cs` | Campo `_col` atribuído no `Awake` mas nunca usado em lugar nenhum | Campo removido |
+| Código morto | `SpriteLibrary.cs` | 8 constantes definidas mas sem nenhuma referência no código | Constantes removidas |
 
 Padrões de projeto que usei:
 
