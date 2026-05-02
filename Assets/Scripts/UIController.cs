@@ -18,6 +18,7 @@
 // -----------------------------------------------------------------------------
 
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace NaoEMario
@@ -26,10 +27,27 @@ namespace NaoEMario
     {
         // Refs pros painéis e textos. Tudo criado em runtime.
         private Canvas _canvas;
-        private GameObject _menuPanel, _hudPanel, _gameOverPanel, _victoryPanel;
+        private GameObject _menuPanel, _hudPanel, _gameOverPanel, _victoryPanel, _pausePanel;
 
         // Textos do HUD
-        private Text _scoreText, _livesText, _coinsText, _highScoreHudText;
+        private Text _scoreText, _livesText, _coinsText, _highScoreHudText, _weaponText, _ammoText;
+
+        // Cache do player atual pra ouvir OnAmmoChanged sem ficar assinando
+        // duas vezes ao reconstruir a fase.
+        private PlayerController2D _trackedPlayer;
+
+        // Grade overlay (exibido brevemente ao completar cada fase).
+        private GameObject _gradePanel;
+        private Text _gradeText, _gradeBonusText;
+        private float _gradePanelHideAt;
+
+        // Banner de modificador (exibido nos primeiros segundos da partida).
+        private GameObject _modifierBanner;
+        private Text _modifierBannerText;
+        private float _modifierBannerHideAt;
+
+        // Flash de arma destruída.
+        private float _weaponLostFlashUntil;
 
         // Texto de recorde no menu
         private Text _menuHighScoreText;
@@ -38,7 +56,7 @@ namespace NaoEMario
         private Text _finalScoreText, _finalHighText;
 
         // Textos da tela de Vitória
-        private Text _victoryScoreText, _victoryHighText, _victoryCoinsText;
+        private Text _victoryScoreText, _victoryHighText, _victoryCoinsText, _victorySecretsText;
 
         // Indicador "Fase X/3" no HUD
         private Text _levelText;
@@ -51,15 +69,21 @@ namespace NaoEMario
             BuildHud();
             BuildGameOver();
             BuildVictory();
+            BuildPause();
+            BuildGradePanel();
+            BuildModifierBanner();
 
             // Se inscreve nos eventos do GameManager (Observer pattern)
             if (GameManager.Instance != null)
             {
-                GameManager.Instance.OnScoreChanged += RefreshScore;
-                GameManager.Instance.OnLivesChanged += RefreshLives;
-                GameManager.Instance.OnStateChanged += OnStateChanged;
-                GameManager.Instance.OnScorePopup += SpawnScorePopup;
-                GameManager.Instance.OnLevelChanged += RefreshLevel;
+                GameManager.Instance.OnScoreChanged    += RefreshScore;
+                GameManager.Instance.OnLivesChanged    += RefreshLives;
+                GameManager.Instance.OnStateChanged    += OnStateChanged;
+                GameManager.Instance.OnScorePopup      += SpawnScorePopup;
+                GameManager.Instance.OnLevelChanged    += RefreshLevel;
+                GameManager.Instance.OnLevelCompleted  += OnLevelCompleted;
+                GameManager.Instance.OnModifierActivated += OnModifierActivated;
+                GameManager.Instance.OnSecretCoinCollected += RefreshScore;
                 // Atualiza visual ja com o estado atual
                 OnStateChanged(GameManager.Instance.CurrentState);
             }
@@ -71,11 +95,19 @@ namespace NaoEMario
         {
             if (GameManager.Instance != null)
             {
-                GameManager.Instance.OnScoreChanged -= RefreshScore;
-                GameManager.Instance.OnLivesChanged -= RefreshLives;
-                GameManager.Instance.OnStateChanged -= OnStateChanged;
-                GameManager.Instance.OnScorePopup -= SpawnScorePopup;
-                GameManager.Instance.OnLevelChanged -= RefreshLevel;
+                GameManager.Instance.OnScoreChanged      -= RefreshScore;
+                GameManager.Instance.OnLivesChanged      -= RefreshLives;
+                GameManager.Instance.OnStateChanged      -= OnStateChanged;
+                GameManager.Instance.OnScorePopup        -= SpawnScorePopup;
+                GameManager.Instance.OnLevelChanged      -= RefreshLevel;
+                GameManager.Instance.OnLevelCompleted    -= OnLevelCompleted;
+                GameManager.Instance.OnModifierActivated -= OnModifierActivated;
+                GameManager.Instance.OnSecretCoinCollected -= RefreshScore;
+            }
+            if (_trackedPlayer != null)
+            {
+                _trackedPlayer.OnAmmoChanged -= RefreshAmmo;
+                _trackedPlayer.OnWeaponLost  -= OnWeaponLost;
             }
         }
 
@@ -186,8 +218,8 @@ namespace NaoEMario
             var sub = MakeText(_menuPanel.transform, "BBB • Plataforma 2D • 3 fases", 36,
                      new Vector2(0.5f, 0.5f), new Vector2(0, 150), new Vector2(900, 60));
             sub.color = new Color(0.45f, 0.75f, 1f);
-            MakeText(_menuPanel.transform, "Setas/A,D para mover  |  Espaço/W para pular", 28,
-                     new Vector2(0.5f, 0f), new Vector2(0, 60), new Vector2(1200, 40));
+            MakeText(_menuPanel.transform, "Setas/A,D mover  •  Espaço/W pular  •  Z atirar  •  ESC pausa", 26,
+                     new Vector2(0.5f, 0f), new Vector2(0, 60), new Vector2(1500, 40));
 
             // Recorde no menu (amarelo, pra dar destaque)
             _menuHighScoreText = MakeText(_menuPanel.transform, "Recorde: 0", 36,
@@ -231,7 +263,7 @@ namespace NaoEMario
                 TextAnchor.UpperLeft);
             _coinsText.color = new Color(1f, 0.95f, 0.3f);
 
-            // Canto superior direito: Vidas + Fase
+            // Canto superior direito: Vidas + Fase + Estado da arma
             _livesText = MakeText(_hudPanel.transform, "Vidas: 3", 48,
                 new Vector2(1, 1), new Vector2(-40, -40), new Vector2(600, 60),
                 TextAnchor.UpperRight);
@@ -239,6 +271,68 @@ namespace NaoEMario
                 new Vector2(1, 1), new Vector2(-40, -100), new Vector2(600, 40),
                 TextAnchor.UpperRight);
             _levelText.color = new Color(0.6f, 0.85f, 1f);
+            _weaponText = MakeText(_hudPanel.transform, "SEM ARMA", 28,
+                new Vector2(1, 1), new Vector2(-40, -140), new Vector2(600, 40),
+                TextAnchor.UpperRight);
+            _weaponText.color = new Color(0.7f, 0.7f, 0.7f);
+            // Contador de munição (só visível quando armado).
+            _ammoText = MakeText(_hudPanel.transform, "", 28,
+                new Vector2(1, 1), new Vector2(-40, -180), new Vector2(600, 40),
+                TextAnchor.UpperRight);
+            _ammoText.color = new Color(1f, 0.85f, 0.15f);
+        }
+
+        // Painel de pausa: fundo semitransparente sobre o jogo congelado.
+        private void BuildPause()
+        {
+            _pausePanel = MakePanel("PausePanel", new Color(0f, 0f, 0f, 0.55f));
+            MakeText(_pausePanel.transform, "PAUSADO", 96,
+                     new Vector2(0.5f, 0.5f), new Vector2(0, 160), new Vector2(1000, 140));
+            MakeText(_pausePanel.transform, "ESC para continuar", 32,
+                     new Vector2(0.5f, 0.5f), new Vector2(0, 70), new Vector2(900, 50));
+            MakeButton(_pausePanel.transform, "CONTINUAR", new Vector2(0, -20),
+                       () => GameManager.Instance?.TogglePause());
+            MakeButton(_pausePanel.transform, "MENU", new Vector2(0, -120),
+                       () => GameBootstrap.Instance.GoToMenu());
+        }
+
+        // Grade overlay: aparece brevemente ao completar fase, mostra S/A/B/C + bônus.
+        private void BuildGradePanel()
+        {
+            // Painel centralizado, menor que a tela toda.
+            _gradePanel = new GameObject("GradePanel", typeof(UnityEngine.UI.Image));
+            _gradePanel.transform.SetParent(_canvas.transform, false);
+            var bg = _gradePanel.GetComponent<UnityEngine.UI.Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.72f);
+            var rt = _gradePanel.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.35f, 0.35f);
+            rt.anchorMax = new Vector2(0.65f, 0.65f);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+
+            _gradeText = MakeText(_gradePanel.transform, "S", 180,
+                new Vector2(0.5f, 0.5f), new Vector2(0, 30), new Vector2(300, 200));
+            _gradeBonusText = MakeText(_gradePanel.transform, "", 40,
+                new Vector2(0.5f, 0.5f), new Vector2(0, -70), new Vector2(400, 60));
+            _gradeBonusText.color = new Color(1f, 0.9f, 0.3f);
+            _gradePanel.SetActive(false);
+        }
+
+        // Banner de modificador: faixa baixa, visível nos primeiros segundos da run.
+        private void BuildModifierBanner()
+        {
+            _modifierBanner = new GameObject("ModifierBanner", typeof(UnityEngine.UI.Image));
+            _modifierBanner.transform.SetParent(_canvas.transform, false);
+            var bg = _modifierBanner.GetComponent<UnityEngine.UI.Image>();
+            bg.color = new Color(0.08f, 0.08f, 0.25f, 0.92f);
+            var rt = _modifierBanner.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.1f, 0.06f);
+            rt.anchorMax = new Vector2(0.9f, 0.14f);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+
+            _modifierBannerText = MakeText(_modifierBanner.transform, "", 32,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1400, 70));
+            _modifierBannerText.color = new Color(0.85f, 0.85f, 1f);
+            _modifierBanner.SetActive(false);
         }
 
         private void BuildGameOver()
@@ -269,6 +363,9 @@ namespace NaoEMario
             _victoryHighText = MakeText(_victoryPanel.transform, "Recorde: 0", 36,
                      new Vector2(0.5f, 0.5f), new Vector2(0, 10), new Vector2(800, 60));
             _victoryHighText.color = new Color(1f, 0.85f, 0.2f);
+            _victorySecretsText = MakeText(_victoryPanel.transform, "", 30,
+                     new Vector2(0.5f, 0.5f), new Vector2(0, -35), new Vector2(800, 50));
+            _victorySecretsText.color = new Color(0.85f, 0.85f, 0.3f);
             MakeButton(_victoryPanel.transform, "JOGAR DE NOVO", new Vector2(0, -60),
                        () => GameBootstrap.Instance.StartGame());
             MakeButton(_victoryPanel.transform, "MENU", new Vector2(0, -160),
@@ -295,11 +392,92 @@ namespace NaoEMario
             if (_victoryScoreText != null)  _victoryScoreText.text  = $"Score final: {s}";
             if (_victoryCoinsText != null)  _victoryCoinsText.text  = $"Moedas: {coins}";
             if (_victoryHighText != null)   _victoryHighText.text   = $"Recorde: {hs}";
+            if (_victorySecretsText != null)
+            {
+                int found = gm.SecretCoinsFound;
+                _victorySecretsText.text = found > 0
+                    ? $"★ Moedas Secretas: {found}/3"
+                    : "Moedas Secretas: 0/3 — procure melhor!";
+            }
         }
 
         private void RefreshLives()
         {
             if (_livesText != null) _livesText.text = $"Vidas: {GameManager.Instance.Lives}";
+        }
+
+        private void Update()
+        {
+            // ESC alterna pausa (só durante o gameplay ou pause já ativo).
+            var kb = Keyboard.current;
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                var gm = GameManager.Instance;
+                if (gm != null && (gm.CurrentState == GameManager.State.Playing
+                                 || gm.CurrentState == GameManager.State.Paused))
+                {
+                    gm.TogglePause();
+                }
+            }
+
+            // Auto-esconde o grade panel e o modifier banner após o tempo configurado.
+            if (_gradePanel != null && _gradePanel.activeSelf && Time.unscaledTime > _gradePanelHideAt)
+                _gradePanel.SetActive(false);
+            if (_modifierBanner != null && _modifierBanner.activeSelf && Time.unscaledTime > _modifierBannerHideAt)
+                _modifierBanner.SetActive(false);
+
+            if (_weaponText == null) return;
+            if (GameManager.Instance?.CurrentState != GameManager.State.Playing
+             && GameManager.Instance?.CurrentState != GameManager.State.Paused) return;
+
+            // Mantém a referência ao player atual e assina seu evento de munição.
+            var player = FindFirstObjectByType<PlayerController2D>();
+            if (player != _trackedPlayer)
+            {
+                if (_trackedPlayer != null)
+                {
+                    _trackedPlayer.OnAmmoChanged -= RefreshAmmo;
+                    _trackedPlayer.OnWeaponLost  -= OnWeaponLost;
+                }
+                _trackedPlayer = player;
+                if (_trackedPlayer != null)
+                {
+                    _trackedPlayer.OnAmmoChanged += RefreshAmmo;
+                    _trackedPlayer.OnWeaponLost  += OnWeaponLost;
+                }
+                RefreshAmmo();
+            }
+            if (player == null) return;
+
+            // Flash vermelho de arma destruída (sobrescreve o texto normal por 1.5s).
+            if (Time.unscaledTime < _weaponLostFlashUntil)
+            {
+                _weaponText.text  = "ARMA DESTRUÍDA!";
+                _weaponText.color = Color.red;
+                return;
+            }
+
+            if (player.HasWeapon)
+            {
+                _weaponText.text  = "ARMADO  [Z/J/K]";
+                _weaponText.color = new Color(1f, 0.85f, 0.15f);
+            }
+            else
+            {
+                _weaponText.text  = "SEM ARMA";
+                _weaponText.color = new Color(0.7f, 0.7f, 0.7f);
+            }
+        }
+
+        private void RefreshAmmo()
+        {
+            if (_ammoText == null) return;
+            if (_trackedPlayer == null || !_trackedPlayer.HasWeapon)
+            {
+                _ammoText.text = string.Empty;
+                return;
+            }
+            _ammoText.text = $"Balas: {_trackedPlayer.Ammo}/{_trackedPlayer.MaxAmmo}";
         }
 
         // Atualiza o "Fase X/Y" tanto no HUD quanto na vitória.
@@ -336,13 +514,58 @@ namespace NaoEMario
         private void OnStateChanged(GameManager.State s)
         {
             _menuPanel.SetActive(s == GameManager.State.Menu);
-            _hudPanel.SetActive(s == GameManager.State.Playing);
+            // HUD continua visível mesmo pausado pra manter contexto.
+            _hudPanel.SetActive(s == GameManager.State.Playing || s == GameManager.State.Paused);
             _gameOverPanel.SetActive(s == GameManager.State.GameOver);
             _victoryPanel.SetActive(s == GameManager.State.Victory);
+            if (_pausePanel != null) _pausePanel.SetActive(s == GameManager.State.Paused);
             // Refresh pra textos das telas mostrarem valores corretos ao abrir
             RefreshScore();
             RefreshLives();
             RefreshLevel();
+        }
+
+        // ===== NOVOS HANDLERS =====
+
+        // Exibe o grade overlay por 2.5s ao completar uma fase.
+        private void OnLevelCompleted(string grade, int bonus)
+        {
+            if (_gradePanel == null) return;
+            // Cor da grade: S=dourado, A=verde, B=azul, C=branco
+            var gradeColor = grade == "S" ? new Color(1f, 0.82f, 0.1f)
+                           : grade == "A" ? new Color(0.4f, 1f, 0.4f)
+                           : grade == "B" ? new Color(0.4f, 0.8f, 1f)
+                           : Color.white;
+            _gradeText.text  = grade;
+            _gradeText.color = gradeColor;
+            _gradeBonusText.text  = bonus > 0 ? $"+{bonus} bônus!" : "";
+            _gradePanel.SetActive(true);
+            _gradePanelHideAt = Time.unscaledTime + 2.5f;
+        }
+
+        // Exibe o banner de modificador por 4s ao iniciar partida.
+        private void OnModifierActivated(GameManager.Modifier mod)
+        {
+            if (_modifierBanner == null) return;
+            string desc = mod switch
+            {
+                GameManager.Modifier.FasterEnemies   => "⚠ MODIFICADOR: Inimigos 30% mais rápidos!",
+                GameManager.Modifier.NoStartAmmo     => "⚠ MODIFICADOR: Primeiro pickup sem munição!",
+                GameManager.Modifier.StompGivesAmmo  => "★ MODIFICADOR: Stompadas recarregam 2 balas!",
+                GameManager.Modifier.DoubleCoinValue => "★ MODIFICADOR: Moedas valem o dobro!",
+                GameManager.Modifier.ExtraLife       => "♥ MODIFICADOR: Começa com 4 vidas!",
+                _                                    => ""
+            };
+            if (string.IsNullOrEmpty(desc)) { _modifierBanner.SetActive(false); return; }
+            _modifierBannerText.text = desc;
+            _modifierBanner.SetActive(true);
+            _modifierBannerHideAt = Time.unscaledTime + 4f;
+        }
+
+        // Flash de arma destruída (acionado pelo evento OnWeaponLost do player).
+        private void OnWeaponLost()
+        {
+            _weaponLostFlashUntil = Time.unscaledTime + 1.5f;
         }
     }
 }

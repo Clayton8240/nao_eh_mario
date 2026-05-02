@@ -127,6 +127,43 @@ namespace NaoEMario
             return _whiteSprite;
         }
 
+        // Sprite circular dourado gerado em código (o atlas Kenney não tem moeda).
+        // Usa textura 16x16 com círculo dourado + borda escura + brilho.
+        private static Sprite _coinSprite;
+        private static Sprite CoinSprite()
+        {
+            if (_coinSprite != null) return _coinSprite;
+            const int size = 16;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Point;
+            tex.wrapMode   = TextureWrapMode.Clamp;
+            var fill    = new Color(1f, 0.82f, 0.10f, 1f);   // dourado
+            var border  = new Color(0.55f, 0.36f, 0.02f, 1f); // borda escura
+            var shine   = new Color(1f, 0.97f, 0.65f, 1f);    // brilho
+            var clear   = new Color(0f, 0f, 0f, 0f);
+            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
+            float rOuter = size * 0.48f;
+            float rInner = size * 0.40f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x - cx, dy = y - cy;
+                float d  = Mathf.Sqrt(dx * dx + dy * dy);
+                Color c;
+                if (d > rOuter)         c = clear;
+                else if (d > rInner)    c = border;
+                else                    c = fill;
+                // Brilho diagonal superior-esquerda
+                if (d <= rInner && (dx + 2f) < -2.2f && dy > 1.5f && d < rInner * 0.85f)
+                    c = shine;
+                tex.SetPixel(x, y, c);
+            }
+            tex.Apply();
+            _coinSprite = Sprite.Create(tex, new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
+            return _coinSprite;
+        }
+
         // Cria um GameObject com sprite do tilemap. Se o tile não existir
         // (por algum motivo o Resources não carregou) usa sprite branco com
         // a cor de fallback, pra pelo menos enxergar onde está.
@@ -185,6 +222,8 @@ namespace NaoEMario
 
             _levelRoot = new GameObject("[Level] " + lv.name);
 
+            BuildBackground(lv);
+
             // Atualiza limite da camera pelo tamanho da fase
             if (_cameraFollow != null) _cameraFollow.maxX = lv.length - 8f;
 
@@ -195,19 +234,32 @@ namespace NaoEMario
             }
 
             // ----- PLATAFORMAS NO AR -----
+            // Plataforma usa o mesmo visual do chão: grama no topo + terra embaixo.
             foreach (var p in lv.platforms)
             {
-                MakeSpriteObject("Platform", p.pos, p.size,
-                    SpriteLibrary.TILE_PLATFORM_MID, _levelRoot.transform,
-                    tiled: true,
-                    tintIfFallback: new Color(0.55f, 0.45f, 0.35f));
+                BuildPlatformBlock(p.pos, p.size);
             }
 
             // ----- MOEDAS -----
             foreach (var c in lv.coins) SpawnCoin(c);
 
+            // ----- PICKUP DE ARMA -----
+            if (lv.hasWeaponPickup) SpawnWeaponPickup(lv.weaponPickup);
+
             // ----- INIMIGOS -----
             foreach (var e in lv.enemies) SpawnEnemy(e);
+
+            // ----- DECORAÇÕES -----
+            foreach (var d in lv.decorations) SpawnDecoration(d);
+
+            // ----- CHECKPOINTS -----
+            foreach (var cp in lv.checkpoints) SpawnCheckpoint(cp);
+
+            // ----- PLATAFORMAS DESAPARECEDORAS (fase 3) -----
+            foreach (var p in lv.disappearingPlatforms) SpawnDisappearingPlatform(p);
+
+            // ----- MOEDAS SECRETAS -----
+            foreach (var sc in lv.secretCoins) SpawnSecretCoin(sc);
 
             // ----- KILL ZONE -----
             // Trigger gigante embaixo do mapa pra detectar quedas no abismo
@@ -237,15 +289,55 @@ namespace NaoEMario
                 new Vector2(1f, 1f), SpriteLibrary.TILE_FLAG,
                 _levelRoot.transform, addCollider: false,
                 tintIfFallback: new Color(0.95f, 0.85f, 0.2f));
-            // Box trigger maior pra ficar facil de "tocar" a meta (cobre a haste toda)
+            // Trigger justinho na bandeirinha — evita pegar a meta sem realmente
+            // tocar nela (era 1.2x3.5 e cobria a haste inteira, sem feedback claro).
             var goalCol = flag.AddComponent<BoxCollider2D>();
-            goalCol.size = new Vector2(1.2f, 3.5f);
-            goalCol.offset = new Vector2(0f, -1f);
+            goalCol.size = new Vector2(1f, 1.2f);
+            goalCol.offset = Vector2.zero;
             goalCol.isTrigger = true;
             flag.AddComponent<Goal>();
 
             // Onde o player nasce (definido pela fase)
             _spawnPoint = new Vector3(lv.spawn.x, lv.spawn.y, 0f);
+        }
+
+        private void BuildBackground(LevelData lv)
+        {
+            float width = lv.length + 24f;
+            float cx    = lv.length * 0.5f;
+
+            // Céu liso tileado (tile 0, sem nuvens)
+            var sky = MakeSpriteObject("BG_Sky", new Vector2(cx, 5f),
+                new Vector2(width, 22f), SpriteLibrary.TILE_BG_SKY,
+                _levelRoot.transform, addCollider: false, tiled: true,
+                tintIfFallback: new Color(0.98f, 0.92f, 0.82f));
+            sky.GetComponent<SpriteRenderer>().sortingOrder = -50;
+
+            // Nuvens esparsas: 1 a cada ~12 units, posições determinísticas
+            float spacing = 12f;
+            int n = Mathf.Max(2, Mathf.CeilToInt(lv.length / spacing));
+            for (int i = 0; i < n; i++)
+            {
+                float x = (i + 0.5f) * spacing + ((i % 2 == 0) ? 1.5f : -2f);
+                float y = 9f + ((i % 3) - 1) * 1.2f;
+                var cloud = MakeSpriteObject($"BG_Cloud_{i}", new Vector2(x, y),
+                    new Vector2(2.2f, 1.6f), SpriteLibrary.TILE_BG_CLOUD,
+                    _levelRoot.transform, addCollider: false, tiled: false,
+                    tintIfFallback: Color.white);
+                cloud.GetComponent<SpriteRenderer>().sortingOrder = -45;
+            }
+        }
+
+        private void MakeColorQuad(string name, Vector2 pos, Vector2 size, Color color, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_levelRoot.transform, false);
+            go.transform.position = pos;
+            go.transform.localScale = new Vector3(size.x, size.y, 1f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = WhiteSprite();
+            sr.color  = color;
+            sr.sortingOrder = order;
         }
 
         private void BuildGroundSegment(float startX, float length)
@@ -272,17 +364,120 @@ namespace NaoEMario
             dirt.GetComponent<SpriteRenderer>().sortingOrder = -1;
         }
 
+        // Plataforma aérea: faixa de grama com 1 unit de altura mínima
+        // (sprite Tiled abaixo de 1 unit não renderiza corretamente).
+        // O topo do collider fica alinhado com o topo da posição informada.
+        private void BuildPlatformBlock(Vector2 center, Vector2 size)
+        {
+            // Garante altura mínima de 1 unit para o visual (sprite tileado exige isso).
+            float h = Mathf.Max(1f, size.y);
+            // Mantém o topo onde estava originalmente (center.y + size.y/2)
+            float topY = center.y + size.y * 0.5f;
+            Vector2 newCenter = new Vector2(center.x, topY - h * 0.5f);
+            Vector2 newSize   = new Vector2(size.x, h);
+
+            MakeSpriteObject("Platform_Grass",
+                newCenter, newSize,
+                SpriteLibrary.TILE_GROUND_GRASS,
+                _levelRoot.transform,
+                addCollider: false,
+                tiled: true,
+                tintIfFallback: new Color(0.40f, 0.65f, 0.30f));
+
+            // Collider fino (0.35 units) alinhado ao TOPO do sprite.
+            // O visual tem 1 unit de altura (necessário pro sprite tileado),
+            // mas a superfície solidá é só o topo — assim o jogador não bate
+            // numa parede invisível ao passar por baixo da plataforma.
+            const float colH = 0.35f;
+            var holder = new GameObject("Platform");
+            holder.transform.SetParent(_levelRoot.transform, false);
+            holder.transform.position = newCenter;
+            var col = holder.AddComponent<BoxCollider2D>();
+            col.size   = new Vector2(newSize.x, colH);
+            col.offset = new Vector2(0f, (newSize.y - colH) * 0.5f); // ancora ao topo
+        }
+
         private void SpawnCoin(Vector2 pos)
         {
-            var go = MakeSpriteObject("Coin", pos, new Vector2(0.6f, 0.6f),
-                SpriteLibrary.TILE_COIN, _levelRoot.transform,
-                addCollider: false,
-                tintIfFallback: new Color(1f, 0.85f, 0.1f));
-            // Trigger circular pra ser mais "moedal"
+            // Moeda é desenhada no código (círculo dourado).
+            var go = new GameObject("Coin");
+            go.transform.SetParent(_levelRoot.transform, false);
+            go.transform.position   = pos;
+            go.transform.localScale = new Vector3(0.6f, 0.6f, 1f);
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite       = CoinSprite();
+            sr.sortingOrder = 5;
+
             var col = go.AddComponent<CircleCollider2D>();
             col.isTrigger = true;
-            col.radius = 0.5f;
+            col.radius    = 0.5f;
             go.AddComponent<Coin>();
+        }
+
+        private void SpawnWeaponPickup(Vector2 pos)
+        {
+            var go = MakeSpriteObject("WeaponPickup", pos, new Vector2(0.8f, 0.8f),
+                SpriteLibrary.TILE_WEAPON_PICKUP, _levelRoot.transform,
+                addCollider: false,
+                tintIfFallback: new Color(0.95f, 0.85f, 0.25f));
+            var col = go.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+            col.radius = 0.55f;
+            go.AddComponent<WeaponPickup>();
+        }
+
+        // Bandeirinha menor azul-clara: feedback visual de "ponto de save".
+        private void SpawnCheckpoint(Vector2 pos)
+        {
+            var go = new GameObject("Checkpoint");
+            go.transform.SetParent(_levelRoot.transform, false);
+            go.transform.position = pos;
+            go.transform.localScale = new Vector3(0.7f, 1.2f, 1f);
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = WhiteSprite();
+            sr.color = new Color(0.4f, 0.85f, 1f);
+            sr.sortingOrder = 4;
+
+            var col = go.AddComponent<BoxCollider2D>();
+            col.isTrigger = true;
+            col.size = new Vector2(1.2f, 1.6f);
+            go.AddComponent<Checkpoint>();
+        }
+
+        // Renderiza uma decoração de cenário (sem colisão, fica atrás do gameplay).
+        // Suporta sprite único (heightTiles<=1) ou empilhamento de 3 tiles
+        // (top/mid/bot) para árvores altas.
+        private void SpawnDecoration(Decoration d)
+        {
+            float scale = d.scale > 0.01f ? d.scale : 1f;
+            if (d.heightTiles > 1)
+            {
+                // Pos.y é a base da árvore (centro do tile inferior).
+                Vector2 baseP = d.pos;
+                MakeDecoSprite("DecoTreeBot", baseP,                          d.botTileIndex, scale);
+                MakeDecoSprite("DecoTreeMid", baseP + new Vector2(0, scale),  d.midTileIndex, scale);
+                MakeDecoSprite("DecoTreeTop", baseP + new Vector2(0, scale*2),d.topTileIndex, scale);
+            }
+            else
+            {
+                MakeDecoSprite("Deco", d.pos, d.tileIndex, scale);
+            }
+        }
+
+        private void MakeDecoSprite(string name, Vector2 pos, int tile, float scale)
+        {
+            var sprite = SpriteLibrary.Get(tile);
+            if (sprite == null) return; // tile inexistente — ignora silenciosamente
+            var go = new GameObject(name);
+            go.transform.SetParent(_levelRoot.transform, false);
+            go.transform.position = pos;
+            go.transform.localScale = new Vector3(scale, scale, 1f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            // Atrás do player (5) e dos tiros (8), mas à frente do céu (-50) e do chão (0/-1).
+            sr.sortingOrder = 1;
         }
 
         private void SpawnEnemy(EnemySpawn def)
@@ -294,6 +489,101 @@ namespace NaoEMario
             rb.freezeRotation = true;
             var e = go.AddComponent<EnemyPatrol>();
             e.patrolRange = def.patrolRange;
+            // Informa o tipo ao EnemyPatrol (crab vs slime = comportamento diferente).
+            e.isCrab = def.spriteTile == SpriteLibrary.TILE_ENEMY_CRAB;
+
+            // Frames de animação: cada inimigo tem 2 frames consecutivos no atlas
+            int frame2 = def.spriteTile == SpriteLibrary.TILE_ENEMY_SLIME
+                ? SpriteLibrary.TILE_ENEMY_SLIME2
+                : SpriteLibrary.TILE_ENEMY_CRAB2;
+            var s1 = SpriteLibrary.Get(def.spriteTile);
+            var s2 = SpriteLibrary.Get(frame2);
+            if (s1 != null && s2 != null)
+            {
+                e.frames = new[] { s1, s2 };
+            }
+        }
+
+        // Plataforma que desaparece 0.7s após contato do player, reaparece após 2s.
+        // Visual laranja pra diferenciar das plataformas normais.
+        private void SpawnDisappearingPlatform(Platform p)
+        {
+            float h   = Mathf.Max(1f, p.size.y);
+            float topY = p.pos.y + p.size.y * 0.5f;
+            Vector2 center  = new Vector2(p.pos.x, topY - h * 0.5f);
+            Vector2 size    = new Vector2(p.size.x, h);
+
+            // Visual: grama laranja-avermelhada pra sinalizar que some.
+            var visual = MakeSpriteObject("DisPlatform_Visual",
+                center, size,
+                SpriteLibrary.TILE_GROUND_GRASS,
+                _levelRoot.transform,
+                addCollider: false, tiled: true,
+                tintIfFallback: new Color(0.9f, 0.5f, 0.1f));
+            // Tint laranja mesmo com o sprite do atlas.
+            visual.GetComponent<SpriteRenderer>().color = new Color(1f, 0.6f, 0.15f);
+
+            // Collider + script numa plataforma separada.
+            // Collider fino (0.35 units) ancorado ao topo, igual ao BuildPlatformBlock.
+            const float colH = 0.35f;
+            var holder = new GameObject("DisappearingPlatform");
+            holder.transform.SetParent(_levelRoot.transform, false);
+            holder.transform.position = center;
+            var col = holder.AddComponent<BoxCollider2D>();
+            col.size   = new Vector2(size.x, colH);
+            col.offset = new Vector2(0f, (size.y - colH) * 0.5f); // ancora ao topo
+            var dp = holder.AddComponent<DisappearingPlatform>();
+            dp.visual = visual;
+        }
+
+        // Moeda secreta: visual estrela amarela brilhante, vale 150 pontos,
+        // colocada em posição fora do caminho óbvio pra incentivar exploração.
+        private void SpawnSecretCoin(Vector2 pos)
+        {
+            var go = new GameObject("SecretCoin");
+            go.transform.SetParent(_levelRoot.transform, false);
+            go.transform.position   = pos;
+            go.transform.localScale = new Vector3(0.7f, 0.7f, 1f);
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite       = MakeStarSprite();
+            sr.sortingOrder = 6;
+
+            var col = go.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+            col.radius    = 0.5f;
+            go.AddComponent<SecretCoin>();
+        }
+
+        // Sprite de estrela 5 pontas gerado em código para as moedas secretas.
+        private static Sprite _starSprite;
+        private static Sprite MakeStarSprite()
+        {
+            if (_starSprite != null) return _starSprite;
+            const int size = 16;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Point;
+            tex.wrapMode   = TextureWrapMode.Clamp;
+            var gold  = new Color(1f, 0.88f, 0.1f, 1f);
+            var clear = new Color(0f, 0f, 0f, 0f);
+            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
+            // Rasteriza uma estrela de 5 pontas por distância ao ângulo mais próximo.
+            float outerR = size * 0.45f, innerR = size * 0.2f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x - cx, dy = y - cy;
+                float angle  = Mathf.Atan2(dy, dx);
+                float dist   = Mathf.Sqrt(dx * dx + dy * dy);
+                // Alterna raio externo/interno a cada 36° (5 pontas).
+                float sector = (angle / (2f * Mathf.PI) * 10f + 10f) % 2f;
+                float r = Mathf.Lerp(innerR, outerR, Mathf.Abs(sector - 1f));
+                tex.SetPixel(x, y, dist <= r ? gold : clear);
+            }
+            tex.Apply();
+            _starSprite = Sprite.Create(tex, new Rect(0, 0, size, size),
+                new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
+            return _starSprite;
         }
 
         // ---------- PLAYER ----------
@@ -323,6 +613,9 @@ namespace NaoEMario
             // Collider menor que o sprite pra dar uma "folguinha" nas colisoes
             var box = _player.AddComponent<BoxCollider2D>();
             box.size = new Vector2(0.7f, 0.95f);
+            // Material com atrito zero — evita "grudar" em paredes/quinas durante
+            // pulos e evita micro-snags em juntas entre tiles do chão.
+            box.sharedMaterial = GetPlayerPhysicsMaterial();
 
             var rb = _player.AddComponent<Rigidbody2D>();
             // Continuous evita que ele atravesse o chão em velocidade alta (tunneling)
@@ -342,6 +635,19 @@ namespace NaoEMario
             _player.SetActive(false);
         }
 
+        // Cache de um material 2D sem atrito — reaproveitado pelo player.
+        private static PhysicsMaterial2D _playerMat;
+        private static PhysicsMaterial2D GetPlayerPhysicsMaterial()
+        {
+            if (_playerMat != null) return _playerMat;
+            _playerMat = new PhysicsMaterial2D("PlayerNoFriction")
+            {
+                friction = 0f,
+                bounciness = 0f,
+            };
+            return _playerMat;
+        }
+
         // ---------- COMANDOS DA UI / FLUXO DE FASES ----------
 
         // Botão "JOGAR" / "TENTAR DE NOVO" / "JOGAR DE NOVO".
@@ -355,18 +661,19 @@ namespace NaoEMario
 
         // Chamado pelo Goal quando o jogador completa uma fase intermediária.
         // O GameManager ja foi avisado (e ja incrementou CurrentLevel) antes disso.
+        // A arma é preservada entre fases (estado persistido).
         public void LoadCurrentLevel()
         {
             BuildLevel(LevelLibrary.Get(GameManager.Instance.CurrentLevel));
-            RespawnPlayerForCurrentLevel();
+            RespawnPlayerForCurrentLevel(keepWeapon: true);
         }
 
-        private void RespawnPlayerForCurrentLevel()
+        private void RespawnPlayerForCurrentLevel(bool keepWeapon = false)
         {
             _player.SetActive(true);
             var ctrl = _player.GetComponent<PlayerController2D>();
             ctrl.SetSpawn(_spawnPoint);
-            ctrl.ResetForNewGame();
+            ctrl.ResetForLevel(keepWeapon);
             // Realinha a camera pro novo spawn (senão o lerp leva 1s pra alcançar)
             if (_cameraFollow != null)
             {

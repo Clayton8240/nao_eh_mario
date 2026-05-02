@@ -28,7 +28,7 @@ namespace NaoEMario
         private AudioSource _source;
 
         // Cada AudioClip é um som diferente (gerado no Awake)
-        private AudioClip _jump, _coin, _hurt, _stomp, _win, _click;
+        private AudioClip _jump, _coin, _hurt, _stomp, _win, _click, _shoot;
 
         private void Awake()
         {
@@ -47,6 +47,7 @@ namespace NaoEMario
             _stomp = MakeBeep(220f, 0.10f, 0.6f);
             _win   = MakeBeep(880f, 0.40f, 0.5f);
             _click = MakeBeep(440f, 0.05f, 0.4f);  // Lá4
+            _shoot = MakeBeep(760f, 0.06f, 0.35f);
         }
 
         // Função que constrói um AudioClip do zero, sample por sample.
@@ -84,5 +85,6 @@ namespace NaoEMario
         public void PlayStomp() => _source.PlayOneShot(_stomp);
         public void PlayWin()   => _source.PlayOneShot(_win);
         public void PlayClick() => _source.PlayOneShot(_click);
+        public void PlayShoot() => _source.PlayOneShot(_shoot);
     }
 }

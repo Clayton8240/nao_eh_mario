@@ -27,19 +27,55 @@ namespace NaoEMario
         public const int COLS = 10;
         public const int ROWS = 6;
 
-        // Constantes pra deixar o código que usa mais legível
-        // (mapeei na unha olhando a imagem Preview.png)
-        public const int TILE_PLAYER       = 41; // coelho azul parado
-        public const int TILE_COIN         = 44; // moeda amarela
-        public const int TILE_GROUND_GRASS = 4;  // grama com terra (row 0, col 4)
-        public const int TILE_GROUND_SOLID = 14; // terra sem grama (row 1, col 4)
-        // ATENÇÃO: TILE_PLATFORM_MID DEVE ser diferente de TILE_GROUND_GRASS (4)!
-        // Index 24 = row 2, col 4 do tilemap (bloco de pedra/madeira).
-        // Se ficar errado visualmente, ajuste aqui pro índice certo do tilemap.
-        public const int TILE_PLATFORM_MID = 24; // plataforma flutuante (row 2, col 4)
-        public const int TILE_FLAG         = 43; // setinha amarela = bandeira/meta
+        // Tiles de fundo / céu
+        public const int TILE_BG_SKY   = 0;  // céu liso (sem nuvens) -- base tileada
+        public const int TILE_BG_CLOUD = 11; // nuvenzinha individual -- decoração esparsa
+
+        // Terreno
+        public const int TILE_GROUND_GRASS = 4;  // grama com terra (chão)
+        public const int TILE_GROUND_SOLID = 14; // terra sem grama
+        public const int TILE_PLATFORM_MID = 20; // plataforma de grama flutuante (linha 2, col 0)
+
+        // Itens (atlas Kenney não tem moeda dedicada)
+        public const int TILE_COIN          = 51; // "moeda" (visual aproximado, não usado — a moeda é gerada em código)
+        public const int TILE_FLAG          = 43; // seta amarela — usada como bandeira da meta
+        public const int TILE_WEAPON_PICKUP = 50; // ícone de arma vermelha
+
+        // Decorações (sprites do atlas que estavam sem uso). Todas são
+        // 1-tile, ficam em cima do chão sem colisão, só pra dar vida visual.
+        public const int TILE_DECO_MUSHROOM_BIG   = 30;
+        public const int TILE_DECO_MUSHROOM_SMALL = 31;
+        public const int TILE_DECO_TULIPS         = 32; // 2 tulipas
+        public const int TILE_DECO_TULIP          = 33; // 1 tulipa
+        public const int TILE_DECO_PLANT          = 34; // grama dupla
+        public const int TILE_DECO_PLANT_SMALL    = 35; // grama simples
+        public const int TILE_DECO_FENCE          = 36;
+        public const int TILE_DECO_FENCE_BROKEN   = 37;
+        public const int TILE_DECO_BUSH           = 38; // arbusto/copinha (árvore pequena)
+        // Para uma "árvore alta" (3 tiles de altura) empilho: TOP, MID, BOT.
+        public const int TILE_DECO_TREE_TOP       = 39;
+        public const int TILE_DECO_TREE_MID       = 49;
+        public const int TILE_DECO_TREE_BOT       = 59;
+
+        // Inimigos (cada um tem 2 frames consecutivos no atlas)
         public const int TILE_ENEMY_SLIME  = 53;
+        public const int TILE_ENEMY_SLIME2 = 54;
         public const int TILE_ENEMY_CRAB   = 55;
+        public const int TILE_ENEMY_CRAB2  = 56;
+
+        // Coelho SEM arma: 45 = idle/pulo  |  46 = corrida
+        public const int TILE_PLAYER      = 45; // sprite inicial (desarmado)
+        public const int TILE_PLAYER_IDLE = 45;
+        public const int TILE_PLAYER_RUN1 = 46;
+        public const int TILE_PLAYER_JUMP = 45;
+
+        // Coelho COM arma: 41 = idle  |  40 = corrida  |  42 = pulo
+        public const int TILE_PLAYER_IDLE_ARMED = 41;
+        public const int TILE_PLAYER_RUN1_ARMED = 40;
+        public const int TILE_PLAYER_JUMP_ARMED = 42;
+
+        // Projétil
+        public const int TILE_BULLET = 44; // tiro em voo
 
         private static Sprite[] _cache;
         private static bool _loaded;
@@ -82,8 +118,10 @@ namespace NaoEMario
 
                     int index = row * COLS + col;
                     var rect = new Rect(x, y, TILE_SIZE, TILE_SIZE);
-                    // pixelsPerUnit = TILE_SIZE faz cada tile ocupar exatamente 1 unidade do mundo
-                    _cache[index] = Sprite.Create(tex, rect, new Vector2(0.5f, 0.5f), TILE_SIZE);
+                    // pixelsPerUnit = TILE_SIZE faz cada tile ocupar exatamente 1 unidade do mundo.
+                    // FullRect é obrigatório pra drawMode=Tiled funcionar sem warning.
+                    _cache[index] = Sprite.Create(tex, rect, new Vector2(0.5f, 0.5f), TILE_SIZE,
+                                                  0, SpriteMeshType.FullRect);
                 }
             }
         }
