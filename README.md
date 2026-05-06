@@ -19,23 +19,24 @@ no total**, com dificuldade crescente.
 - [x] **3 fases** com layouts diferentes e progressão de dificuldade
 - [x] **Sprites de verdade** (Kenney Pixel Line Platformer, CC0)
 - [x] **Revisão de código**: bugs corrigidos e código morto removido
+- [x] **Áudio**: efeitos sonoros e músicas de fundo em arquivo (`.mp3`/`.wav`)
 
 ## 🎮 Como rodar (passo a passo)
 
-> ⚠️ Precisa do **Unity 6000.4.3f1** instalado (qualquer versão que abra o projeto serve, mas eu testei nessa).
+> ⚠️ Precisa do **Unity 6000.4.3f1** instalado (qualquer versão próxima que abra o projeto serve, mas foi testado nessa). Baixe pelo **Unity Hub** em [unity.com/download](https://unity.com/download).
 
 ### 1. Abrir o projeto
 
 1. Abra o **Unity Hub**.
 2. Clique em **Add → Add project from disk**.
-3. Selecione a pasta do projeto (essa pasta aqui).
-4. Clique no projeto na lista pra abrir. (Primeira vez demora uns minutinhos pra importar.)
+3. Selecione esta pasta.
+4. Clique no projeto na lista para abrir. *(Primeira vez demora alguns minutos para importar.)*
 
 ### 2. Abrir a cena
 
 No painel **Project** (canto inferior esquerdo do editor), navegue até:
 
-```text
+```
 Assets → Scenes → SampleScene
 ```
 
@@ -43,16 +44,43 @@ Dê **duplo clique** em `SampleScene`.
 
 ### 3. Configurar a cena (única coisa manual!)
 
-1. Na **Hierarchy** (painel à esquerda no topo), apague tudo se quiser deixar limpo (não é obrigatório, o script reaproveita o que já existir).
-2. Clique com o **botão direito na Hierarchy** → **Create Empty**.
-3. Renomeie esse novo objeto pra `Bootstrap` (ou qualquer nome, tanto faz).
-4. Com ele selecionado, no **Inspector** (painel à direita) clique em **Add Component**.
-5. Digite `Game Bootstrap` e clique no script que aparecer.
-6. Aperte `Ctrl + S` pra salvar a cena.
+1. Na **Hierarchy** (painel esquerdo superior), clique com o **botão direito → Create Empty**.
+2. Renomeie o novo objeto para `Bootstrap`.
+3. Com ele selecionado, no **Inspector** (painel direito) clique em **Add Component**.
+4. Digite `Game Bootstrap` e clique no script que aparecer.
+5. Pressione `Ctrl + S` para salvar a cena.
+
+> 💡 Se já existir um objeto com `GameBootstrap` na cena, pule este passo.
 
 ### 4. Apertar Play
 
-Clique no botão ▶ lá em cima no centro do editor. O menu vai aparecer e é só clicar em **JOGAR**.
+Clique no botão **▶** no centro superior do editor. O menu inicial aparecerá — clique em **JOGAR**.
+
+---
+
+## 🪟 Gerar um executável para Windows
+
+É possível gerar um `.exe` que roda sem precisar do Unity Editor instalado. O próprio Unity faz isso pela aba **Build Settings**.
+
+### Passo a passo
+
+1. No menu do editor: **File → Build Settings** (ou `Ctrl + Shift + B`).
+2. Certifique-se de que a plataforma selecionada é **Windows, Mac, Linux**.
+   - Se não estiver, selecione e clique em **Switch Platform** (pode demorar).
+3. Clique em **Add Open Scenes** para garantir que `SampleScene` está na lista.
+4. Clique em **Build** (só gera o arquivo) ou **Build and Run** (gera e já abre).
+5. Escolha uma pasta de destino (ex: `Build/`) e aguarde.
+
+O resultado será uma pasta com:
+```
+NaoEMario.exe       ← executável principal
+NaoEMario_Data/     ← assets do jogo (não apague!)
+UnityPlayer.dll     ← runtime do Unity
+```
+
+Basta zipar essa pasta e distribuir — quem receber não precisa do Unity instalado, só executa o `.exe`.
+
+---
 
 ## 🎮 Controles
 
@@ -92,7 +120,7 @@ Estrutura dos scripts (em [Assets/Scripts/](Assets/Scripts/)):
 | [GameManager.cs](Assets/Scripts/GameManager.cs) | Singleton. Score, vidas, recorde, estado, fase atual. |
 | [LevelLibrary.cs](Assets/Scripts/LevelLibrary.cs) | Definição das 3 fases (plataformas/moedas/inimigos). |
 | [SpriteLibrary.cs](Assets/Scripts/SpriteLibrary.cs) | Carrega o tilemap do Kenney e fatia em sprites. |
-| [SfxPlayer.cs](Assets/Scripts/SfxPlayer.cs) | Toca os SFX (gerados por código com onda senoidal). |
+| [SfxPlayer.cs](Assets/Scripts/SfxPlayer.cs) | Carrega SFX e BGM de `Resources/sfx/`; troca música conforme estado do jogo. |
 | [PlayerController2D.cs](Assets/Scripts/PlayerController2D.cs) | Movimento e pulo do coelho. |
 | [EnemyPatrol.cs](Assets/Scripts/EnemyPatrol.cs) | IA do inimigo (patrulha + leva stomp). |
 | [Coin.cs](Assets/Scripts/Coin.cs) | Moeda coletável. |
@@ -134,14 +162,13 @@ Padrões de projeto que usei:
 | Sprites aparecem como quadrados magenta | O Unity ainda não importou `Assets/Resources/bbb_tilemap.png` — espera o reimport ou faça **Assets → Reimport All** |
 | Sprites borrados (não pixel art) | No Unity, clica em `bbb_tilemap.png`, no Inspector seta **Filter Mode = Point** + **Compression = None**. (O código também força isso em runtime.) |
 | Erro `InputSystem` not found | Vai em **Window → Package Manager** e confirma que `Input System` ta instalado |
-| Nada de som | Pode ser o sistema do PC mesmo. No editor, confirma se o ícone de som no Game View não tá mutado |
+| Nada de som | Confirma se o ícone de som no **Game View** não está mutado. Na build, verifica se os arquivos `*_Data/` estão na mesma pasta do `.exe` |
 | Botões do menu não respondem ao clique | Talvez tem dois `EventSystem` na cena. Apaga um |
 | `Both Input Systems disabled` | **Edit → Project Settings → Player → Active Input Handling → Both** e reinicia o editor |
 
 ## 🚧 Próximos passos
 
 - [ ] Animações de andar/pular do coelho (já tem o sprite walk no tilemap, falta trocar entre frames)
-- [ ] Música de fundo
 - [ ] Inimigos com comportamentos diferentes (abelha voa, caranguejo é mais rápido, etc)
 - [ ] Power-ups
 - [ ] Tela de pause
@@ -152,5 +179,5 @@ Padrões de projeto que usei:
 - Engine: **Unity 6** (com Universal Render Pipeline)
 - Input: **Unity New Input System**
 - Sprites: **Kenney Pixel Line Platformer** ([kenney.nl](https://kenney.nl)) — licença CC0
-- Sons: gerados em runtime com onda senoidal (matemática que vimos em sinais 😄).
+- Sons: efeitos sonoros e músicas de fundo em `Assets/Resources/sfx/` (`.mp3`/`.wav`).
 - Código: feito do zero por mim como trabalho da disciplina.

@@ -14,7 +14,6 @@
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
-/[Bb]uild/
 /[Bb]uilds/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
@@ -108,3 +107,6 @@ InitTestScene*.unity*
 
 # Arquivos zip (assets originais, desnecessários no repo)
 *.zip
+
+# Efeitos sonoros originais (versões processadas estão em Assets/Resources/sfx/)
+/sound_effects/
