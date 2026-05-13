@@ -14,8 +14,8 @@
     <description>Editor visual de fases para Blue Bunny Blaster</description>
 
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -30,6 +30,12 @@
 
     <build>
         <plugins>
+            <!-- Pin maven-compiler-plugin to a version that supports Java 25 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
             <!-- Gera um JAR executável com todas as dependências embutidas -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
