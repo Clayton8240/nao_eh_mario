@@ -20,6 +20,8 @@ no total**, com dificuldade crescente.
 - [x] **Sprites de verdade** (Kenney Pixel Line Platformer, CC0)
 - [x] **Revisão de código**: bugs corrigidos e código morto removido
 - [x] **Áudio**: efeitos sonoros e músicas de fundo em arquivo (`.mp3`/`.wav`)
+- [x] **Tela de pause**: ESC pausa/despausa; botões Continuar e Menu
+- [x] **Editor visual de fases** (`LevelEditor/`): app Swing em Java 25, desenha plataformas/moedas/inimigos no canvas e exporta JSON compatível com o Unity
 
 ## 🎮 Como rodar (passo a passo)
 
@@ -171,8 +173,7 @@ Padrões de projeto que usei:
 - [ ] Animações de andar/pular do coelho (já tem o sprite walk no tilemap, falta trocar entre frames)
 - [ ] Inimigos com comportamentos diferentes (abelha voa, caranguejo é mais rápido, etc)
 - [ ] Power-ups
-- [ ] Tela de pause
-- [ ] Editor visual de fases (no lugar do hardcode em `LevelLibrary`)
+- [x] ~~Editor visual de fases~~ (feito — ver `LevelEditor/`)
 
 ## 📝 Créditos
 
@@ -181,3 +182,59 @@ Padrões de projeto que usei:
 - Sprites: **Kenney Pixel Line Platformer** ([kenney.nl](https://kenney.nl)) — licença CC0
 - Sons: efeitos sonoros e músicas de fundo em `Assets/Resources/sfx/` (`.mp3`/`.wav`).
 - Código: feito do zero por mim como trabalho da disciplina.
+
+---
+
+## 🛠️ BBB Level Editor (Construtor de Fases)
+
+Aplicativo Java (Swing) separado que substitui o hardcode em `LevelLibrary`. Permite desenhar fases visualmente e exportar JSON que o Unity carrega automaticamente.
+
+**Requisitos**: Java 25 LTS + Maven (qualquer versão ≥ 3.9).
+
+### Gerar o JAR
+
+No seu terminal (Windows CMD/PowerShell ou terminal do Linux/Mac), execute:
+```bash
+cd LevelEditor
+mvn clean package -q
+```
+*(Nota: Certifique-se de que o JDK 25 está instalado e a variável `JAVA_HOME` configurada no sistema)*
+
+O JAR executável será gerado em `LevelEditor/target/level-editor-1.0-SNAPSHOT.jar`.
+
+### Rodar
+
+```bash
+java -jar LevelEditor/target/level-editor-1.0-SNAPSHOT.jar
+```
+
+### 📖 Tutorial Detalhado de Uso
+
+O editor foi projetado para ser simples e rápido, utilizando o mouse para desenhar e o teclado para trocar de ferramentas rapidamente.
+
+#### 1. Integração com o Unity (Automática)
+O jogo já está programado para procurar fases customizadas! Basta salvar o seu nível dentro da pasta `Assets/Resources/levels/` no projeto Unity com os nomes **`level1.json`**, **`level2.json`** ou **`level3.json`**. O jogo carregará a sua fase automaticamente na respectiva ordem.
+
+#### 2. Atalhos e Ferramentas
+Você pode selecionar as ferramentas clicando na barra lateral ou usando os atalhos de teclado:
+- **[G] Chão (Ground):** Clique e arraste horizontalmente para criar uma base sólida de chão com o comprimento desejado.
+- **[P] Plataforma (Platform):** Clique e arraste para definir a largura de uma plataforma aérea.
+- **[U] Plat. Sumida (Disappearing Platform):** Plataformas laranjas que somem pouco depois de pisar. Clique e arraste.
+- **[M] Moeda (Coin):** Clique simples para colocar moedas normais pelo mapa.
+- **[X] Moeda Secreta (Secret Coin):** Moedas especiais e escondidas. Clique simples para colocar.
+- **[I] Inimigo (Enemy):** No rodapé do editor, escolha o tipo de inimigo (Slime ou Crab). Para adicionar o inimigo, **clique e arraste** para definir a distância máxima da área de patrulha dele (uma linha pontilhada vermelha mostrará até onde ele andará).
+- **[C] Checkpoint:** Clique simples para criar uma bandeira azul de checkpoint (ponto de retorno).
+- **[W] Arma (Weapon):** Clique simples para colocar a arma no mapa (marcada como "ARM"). O checkbox "Arma?" no rodapé será ativado automaticamente.
+- **[B] Spawn:** A seta verde que indica onde o coelho nasce no início da fase. Clique simples para posicionar.
+- **[Del] Apagar:** Selecione e clique perto de um elemento para apagá-lo. (Dica: Você também pode simplesmente clicar com o **botão direito do mouse** usando qualquer outra ferramenta para apagar o elemento mais próximo da sua mira).
+
+#### 3. Passo a Passo para Criar sua Fase
+1. Abra o editor e clique em **Arquivo → Nova fase** (ou `Ctrl + N`).
+2. Defina o **Nome** e o **Comprimento** da fase (no rodapé inferior). O comprimento expande a largura horizontal total da fase.
+3. Comece desenhando o **Chão** (`G`), arrastando com o mouse.
+4. Use a ferramenta **Spawn** (`B`) para marcar onde o jogador vai começar.
+5. Coloque plataformas (`P`), moedas (`M`) e inimigos (`I`) para montar seus desafios.
+6. Não se esqueça de adicionar a arma (`W`), pelo menos um Checkpoint (`C`) e desenhar um caminho que alcance a linha final que demarca a **Meta**.
+7. Clique em **Arquivo → Salvar Como** (`Ctrl + Shift + S`) e navegue até a pasta `Assets/Resources/levels/` do projeto Unity.
+8. Salve como `level1.json` (para substituir a primeira fase).
+9. Dê **Play** no Unity, clique em Jogar e divirta-se jogando a sua própria criação!

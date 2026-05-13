@@ -485,6 +485,7 @@ namespace NaoEMario
             var go = MakeSpriteObject("Enemy", def.pos, new Vector2(0.9f, 0.9f),
                 def.spriteTile, _levelRoot.transform,
                 tintIfFallback: new Color(0.85f, 0.2f, 0.2f));
+            go.GetComponent<SpriteRenderer>().sortingOrder = 10;
             var rb = go.AddComponent<Rigidbody2D>();
             rb.freezeRotation = true;
             var e = go.AddComponent<EnemyPatrol>();
@@ -608,7 +609,7 @@ namespace NaoEMario
                 sr.sprite = WhiteSprite();
                 sr.color = new Color(0.2f, 0.5f, 0.95f); // azul fallback
             }
-            sr.sortingOrder = 5; // desenha por cima de outros sprites
+            sr.sortingOrder = 20; // desenha por cima de outros sprites e decorações
 
             // Collider menor que o sprite pra dar uma "folguinha" nas colisoes
             var box = _player.AddComponent<BoxCollider2D>();

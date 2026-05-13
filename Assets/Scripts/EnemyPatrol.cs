@@ -228,6 +228,7 @@ namespace NaoEMario
         {
             _alive = false;
             SfxPlayer.Instance?.PlayStomp();
+            GameManager.Instance?.AddEnemyDefeated();
             // Espera um frame pequeno pra física aplicar o quique antes de sumir
             Destroy(gameObject, 0.05f);
         }
@@ -248,6 +249,7 @@ namespace NaoEMario
             _alive = false;
             SfxPlayer.Instance?.PlayStomp();
             GameManager.Instance?.AddScore(50, transform.position);
+            GameManager.Instance?.AddEnemyDefeated();
             Destroy(gameObject);
         }
     }

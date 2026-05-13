@@ -43,6 +43,7 @@ namespace NaoEMario
         public int topTileIndex; public int midTileIndex; public int botTileIndex; // só quando heightTiles>1
     }
 
+    [System.Serializable]
     public class LevelData
     {
         public string name;
@@ -89,10 +90,27 @@ namespace NaoEMario
             if (_levels != null) return;
             _levels = new LevelData[]
             {
-                BuildLevel1(),
-                BuildLevel2(),
-                BuildLevel3(),
+                LoadOrBuild(1, BuildLevel1),
+                LoadOrBuild(2, BuildLevel2),
+                LoadOrBuild(3, BuildLevel3),
             };
+        }
+
+        private static LevelData LoadOrBuild(int levelId, System.Func<LevelData> fallback)
+        {
+            TextAsset textAsset = Resources.Load<TextAsset>("levels/level" + levelId);
+            if (textAsset != null && !string.IsNullOrEmpty(textAsset.text))
+            {
+                try
+                {
+                    return JsonUtility.FromJson<LevelData>(textAsset.text);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError("Error loading level JSON: " + e.Message);
+                }
+            }
+            return fallback();
         }
 
         // Aliases de tile pra deixar a leitura das listas mais curta.

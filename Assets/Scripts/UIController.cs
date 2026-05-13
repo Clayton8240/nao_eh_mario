@@ -27,7 +27,7 @@ namespace NaoEMario
     {
         // Refs pros painéis e textos. Tudo criado em runtime.
         private Canvas _canvas;
-        private GameObject _menuPanel, _hudPanel, _gameOverPanel, _victoryPanel, _pausePanel;
+        private GameObject _menuPanel, _hudPanel, _gameOverPanel, _victoryPanel, _pausePanel, _recordsPanel;
 
         // Textos do HUD
         private Text _scoreText, _livesText, _coinsText, _highScoreHudText, _weaponText, _ammoText;
@@ -55,6 +55,9 @@ namespace NaoEMario
         // Textos da tela de Game Over
         private Text _finalScoreText, _finalHighText;
 
+        // Textos da tela de Recordes
+        private Text _recordsHighText, _recordsStatsText;
+
         // Textos da tela de Vitória
         private Text _victoryScoreText, _victoryHighText, _victoryCoinsText, _victorySecretsText;
 
@@ -70,6 +73,7 @@ namespace NaoEMario
             BuildGameOver();
             BuildVictory();
             BuildPause();
+            BuildRecords();
             BuildGradePanel();
             BuildModifierBanner();
 
@@ -229,7 +233,9 @@ namespace NaoEMario
 
             MakeButton(_menuPanel.transform, "JOGAR",  new Vector2(0, -20),
                        () => GameBootstrap.Instance.StartGame());
-            MakeButton(_menuPanel.transform, "SAIR",   new Vector2(0, -120), () =>
+            MakeButton(_menuPanel.transform, "RECORDES", new Vector2(0, -120),
+                       () => GameManager.Instance?.SetState(GameManager.State.Records));
+            MakeButton(_menuPanel.transform, "SAIR",   new Vector2(0, -220), () =>
             {
                 // No editor a gente não pode chamar Application.Quit() (não fecha nada),
                 // por isso essa diretiva de pré-processador. Aprendi no Stack Overflow.
@@ -239,6 +245,26 @@ namespace NaoEMario
                 Application.Quit();
 #endif
             });
+        }
+
+        private void BuildRecords()
+        {
+            _recordsPanel = MakePanel("RecordsPanel", new Color(0.05f, 0.1f, 0.15f, 1f));
+            MakeText(_recordsPanel.transform, "ESTATÍSTICAS GLOBAIS", 80,
+                     new Vector2(0.5f, 0.5f), new Vector2(0, 320), new Vector2(1200, 120));
+
+            _recordsHighText = MakeText(_recordsPanel.transform, "Pontuação Máxima: 0", 60,
+                                        new Vector2(0.5f, 0.5f), new Vector2(0, 180), new Vector2(1000, 80));
+            _recordsHighText.color = new Color(1f, 0.85f, 0.2f);
+
+            _recordsStatsText = MakeText(_recordsPanel.transform, "", 40,
+                                         new Vector2(0.5f, 0.5f), new Vector2(0, -40), new Vector2(1000, 400),
+                                         TextAnchor.UpperCenter);
+            _recordsStatsText.lineSpacing = 1.3f;
+            _recordsStatsText.color = new Color(0.85f, 0.95f, 1f);
+
+            MakeButton(_recordsPanel.transform, "VOLTAR", new Vector2(0, -220),
+                       () => GameManager.Instance?.SetState(GameManager.State.Menu));
         }
 
         private void BuildHud()
@@ -389,6 +415,17 @@ namespace NaoEMario
             if (_menuHighScoreText != null) _menuHighScoreText.text = $"Recorde: {hs}";
             if (_finalScoreText != null)    _finalScoreText.text    = $"Score: {s}";
             if (_finalHighText != null)     _finalHighText.text     = $"Recorde: {hs}";
+            if (_recordsHighText != null)   _recordsHighText.text   = $"Pontuação Máxima: {hs}";
+            if (_recordsStatsText != null)
+            {
+                _recordsStatsText.text = 
+                    $"Fase Mais Longe Atingida: {gm.MaxLevelReached}/{gm.TotalLevels}\n" +
+                    $"Total de Partidas Jogadas: {gm.TotalGamesPlayed}\n" +
+                    $"Total de Moedas Coletadas: {gm.TotalCoinsEver}\n" +
+                    $"Moedas Secretas Encontradas: {gm.TotalSecretsEver}\n" +
+                    $"Inimigos Derrotados: {gm.TotalEnemiesDefeated}\n" +
+                    $"Pulos Executados: {gm.TotalJumps}";
+            }
             if (_victoryScoreText != null)  _victoryScoreText.text  = $"Score final: {s}";
             if (_victoryCoinsText != null)  _victoryCoinsText.text  = $"Moedas: {coins}";
             if (_victoryHighText != null)   _victoryHighText.text   = $"Recorde: {hs}";
@@ -519,6 +556,7 @@ namespace NaoEMario
             _gameOverPanel.SetActive(s == GameManager.State.GameOver);
             _victoryPanel.SetActive(s == GameManager.State.Victory);
             if (_pausePanel != null) _pausePanel.SetActive(s == GameManager.State.Paused);
+            if (_recordsPanel != null) _recordsPanel.SetActive(s == GameManager.State.Records);
             // Refresh pra textos das telas mostrarem valores corretos ao abrir
             RefreshScore();
             RefreshLives();

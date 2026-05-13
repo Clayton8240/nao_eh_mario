@@ -32,6 +32,12 @@ namespace NaoEMario
         // Mantive o prefixo antigo "naoemario" pra não resetar o recorde de quem ja jogou
         // o prototípo anterior (apenas mudou o título de exibição pra Blue Bunny Blaster).
         private const string PREF_HIGHSCORE = "naoemario.highscore";
+        private const string PREF_MAX_LEVEL = "bbb.maxlevel";
+        private const string PREF_TOTAL_COINS = "bbb.totalcoins";
+        private const string PREF_TOTAL_SECRETS = "bbb.totalsecrets";
+        private const string PREF_GAMES_PLAYED = "bbb.gamesplayed";
+        private const string PREF_TOTAL_ENEMIES = "bbb.totalenemies";
+        private const string PREF_TOTAL_JUMPS = "bbb.totaljumps";
 
         // Propriedades com get publico e set privado pra ninguem mexer de fora.
         public int Score { get; private set; }
@@ -44,13 +50,21 @@ namespace NaoEMario
         // Moedas secretas (1 por fase, escondidas fora do caminho óbvio).
         public int SecretCoinsFound { get; private set; }
 
+        // ----- Estatísticas Globais (para a tela de Recordes) -----
+        public int MaxLevelReached { get; private set; }
+        public int TotalCoinsEver { get; private set; }
+        public int TotalSecretsEver { get; private set; }
+        public int TotalGamesPlayed { get; private set; }
+        public int TotalEnemiesDefeated { get; private set; }
+        public int TotalJumps { get; private set; }
+
         // ----- Sistema de fases (BBB tem 3) -----
         // CurrentLevel é 1-based pq fica natural mostrar "Fase 1/3" pro jogador.
         public int CurrentLevel { get; private set; } = 1;
         public int TotalLevels => LevelLibrary.Count;
 
         // Enum pra deixar claro os estados do jogo (loop de jogo: Menu->Playing->GameOver/Victory)
-        public enum State { Menu, Playing, GameOver, Victory, Paused }
+        public enum State { Menu, Playing, GameOver, Victory, Paused, Records }
         public State CurrentState { get; private set; } = State.Menu;
 
         // ===== MODIFICADORES DE PARTIDA (roguelite micro-modifier) =====
@@ -105,6 +119,12 @@ namespace NaoEMario
 
             // Carrega o recorde salvo no disco (default = 0 se não tem nada).
             HighScore = PlayerPrefs.GetInt(PREF_HIGHSCORE, 0);
+            MaxLevelReached = PlayerPrefs.GetInt(PREF_MAX_LEVEL, 1);
+            TotalCoinsEver = PlayerPrefs.GetInt(PREF_TOTAL_COINS, 0);
+            TotalSecretsEver = PlayerPrefs.GetInt(PREF_TOTAL_SECRETS, 0);
+            TotalGamesPlayed = PlayerPrefs.GetInt(PREF_GAMES_PLAYED, 0);
+            TotalEnemiesDefeated = PlayerPrefs.GetInt(PREF_TOTAL_ENEMIES, 0);
+            TotalJumps = PlayerPrefs.GetInt(PREF_TOTAL_JUMPS, 0);
         }
 
         // Sobrecarga: versão que dispara o popup "+10" na posição do mundo
@@ -132,6 +152,8 @@ namespace NaoEMario
             if (isCoin)
             {
                 CoinsCollected++;
+                TotalCoinsEver++;
+                PlayerPrefs.SetInt(PREF_TOTAL_COINS, TotalCoinsEver);
                 // Estilo Mario clássico: a cada 100 moedas, ganha uma vida extra.
                 if (CoinsCollected >= _nextLifeBonusAt)
                 {
@@ -190,6 +212,10 @@ namespace NaoEMario
             OnLivesChanged?.Invoke();
             OnLevelChanged?.Invoke();
 
+            TotalGamesPlayed++;
+            PlayerPrefs.SetInt(PREF_GAMES_PLAYED, TotalGamesPlayed);
+            PlayerPrefs.Save();
+
             // Sorteia o modificador da run (1–5; 0 = None reservado para run limpa).
             // Usa Random.Range(0, 6) pra dar 1/6 de chance de run sem modificador.
             ActiveModifier = (Modifier)Random.Range(0, 6);
@@ -245,6 +271,12 @@ namespace NaoEMario
             else
             {
                 CurrentLevel++;
+                if (CurrentLevel > MaxLevelReached)
+                {
+                    MaxLevelReached = CurrentLevel;
+                    PlayerPrefs.SetInt(PREF_MAX_LEVEL, MaxLevelReached);
+                    PlayerPrefs.Save();
+                }
                 OnLevelChanged?.Invoke();
                 // O GameBootstrap escuta OnLevelChanged via UI? Não, mais simples:
                 // o Goal chama Bootstrap.LoadCurrentLevel() depois de chamar isso aqui.
@@ -264,8 +296,23 @@ namespace NaoEMario
         public void CollectSecretCoin(Vector3 worldPos)
         {
             SecretCoinsFound++;
+            TotalSecretsEver++;
+            PlayerPrefs.SetInt(PREF_TOTAL_SECRETS, TotalSecretsEver);
+            PlayerPrefs.Save();
             AddScore(150, worldPos); // moeda secreta vale muito mais
             OnSecretCoinCollected?.Invoke();
+        }
+
+        public void AddEnemyDefeated()
+        {
+            TotalEnemiesDefeated++;
+            PlayerPrefs.SetInt(PREF_TOTAL_ENEMIES, TotalEnemiesDefeated);
+        }
+
+        public void AddJump()
+        {
+            TotalJumps++;
+            PlayerPrefs.SetInt(PREF_TOTAL_JUMPS, TotalJumps);
         }
     }
 }

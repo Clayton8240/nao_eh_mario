@@ -43,8 +43,6 @@
         "Assets/**/*.meta": true,
         "Assets/**/*.prefab": true,
         "Assets/**/*.unity": true,
-        // "build/": true,
-        // "Build/": true,
         "Library/": true,
         "library/": true,
         "obj/": true,
@@ -60,7 +58,7 @@
         "*.asset": "yaml",
         "*.meta": "yaml",
         "*.prefab": "yaml",
-        "*.unity": "yaml",
+        "*.unity": "yaml"
     },
     "yaml.validate": false,
     "explorer.fileNesting.enabled": true,
@@ -68,6 +66,7 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "não é mario.slnx",
-    "dotnet.enableWorkspaceBasedDevelopment": false
+    "dotnet.defaultSolution": "Blue Bunny Blaster.slnx",
+    "dotnet.enableWorkspaceBasedDevelopment": false,
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

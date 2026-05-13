@@ -148,6 +148,7 @@ namespace NaoEMario
             {
                 _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, jumpForce);
                 SfxPlayer.Instance?.PlayJump();
+                GameManager.Instance?.AddJump();
                 // Consome ambas janelas pra não pular 2x no mesmo press.
                 _lastJumpPressTime = -999f;
                 _lastGroundedTime = -999f;
